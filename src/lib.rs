@@ -21,16 +21,16 @@ mod dag_isomorphism;
 mod graph;
 
 use std::cmp::Ordering;
-use std::collections::{BinaryHeap, HashSet};
+use std::collections::BinaryHeap;
 use std::ops::{Index, IndexMut};
 
-use hashbrown::HashMap;
+use hashbrown::{HashMap, HashSet};
 
 use pyo3::class::PyMappingProtocol;
 use pyo3::create_exception;
 use pyo3::exceptions::{Exception, IndexError};
 use pyo3::prelude::*;
-use pyo3::types::{PyDict, PyList, PyLong, PyTuple};
+use pyo3::types::{PyDict, PyList, PyLong, PyTuple, PySet};
 use pyo3::wrap_pyfunction;
 use pyo3::Python;
 
@@ -872,7 +872,13 @@ fn ancestors(py: Python, graph: &PyDAG, node: usize) -> PyResult<PyObject> {
         out_set.insert(n_int);
     }
     out_set.remove(&node);
-    Ok(out_set.to_object(py))
+    let set = PySet::new::<usize>(py, &[])?;
+    {
+        for val in out_set {
+            set.add(val)?;
+        }
+    }
+    Ok(set.into())
 }
 
 #[pyfunction]
@@ -885,7 +891,13 @@ fn descendants(py: Python, graph: &PyDAG, node: usize) -> PyResult<PyObject> {
         out_set.insert(n_int);
     }
     out_set.remove(&node);
-    Ok(out_set.to_object(py))
+    let set = PySet::new::<usize>(py, &[])?;
+    {
+        for val in out_set {
+            set.add(val)?;
+        }
+    }
+    Ok(set.into())
 }
 
 #[pyfunction]
