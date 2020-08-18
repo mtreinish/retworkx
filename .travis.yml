@@ -73,6 +73,7 @@ jobs:
         - export RUSTFLAGS="-Zprofile -Ccodegen-units=1 -Copt-level=0 -Clink-dead-code -Coverflow-checks=off -Zpanic_abort_tests -Cpanic=abort"
         - export RUSTDOCFLAGS="-Cpanic=abort"
         - cd tests && python -m unittest discover . && cd ..
+        - cargo test --no-default-features
         - zip -0 ccov.zip `find . \( -name "retworkx*.gc*" \) -print`
         - ./grcov ccov.zip -s . -t lcov --ignore-not-existing --ignore "/*" -o coveralls.info
         - coveralls-lcov coveralls.info

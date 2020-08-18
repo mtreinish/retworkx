@@ -23,6 +23,7 @@ use pyo3::prelude::*;
 use pyo3::types::{PyDict, PyList, PyLong, PyString, PyTuple};
 use pyo3::Python;
 
+use fixedbitset::FixedBitSet;
 use petgraph::algo;
 use petgraph::graph::{EdgeIndex, NodeIndex};
 use petgraph::prelude::*;
@@ -243,16 +244,76 @@ impl IndexMut<EdgeIndex> for PyDiGraph {
 impl GetAdjacencyMatrix for PyDiGraph {
     type AdjMatrix =
         <StableDiGraph<PyObject, PyObject> as GetAdjacencyMatrix>::AdjMatrix;
+
     fn adjacency_matrix(&self) -> Self::AdjMatrix {
-        self.graph.adjacency_matrix()
+        let node_map: Option<HashMap<NodeIndex, usize>>;
+        let n: usize;
+        if self.node_removed {
+            let mut node_hash_map: HashMap<NodeIndex, usize> = HashMap::new();
+            let mut count = 0;
+            for node in self.graph.node_indices() {
+                node_hash_map.insert(node, count);
+                count += 1;
+            }
+            n = count;
+            node_map = Some(node_hash_map);
+        } else {
+            n = self.graph.node_bound();
+            node_map = None;
+        }
+        let mut matrix = FixedBitSet::with_capacity(n * n);
+        for edge in self.graph.edge_references() {
+            let i: usize;
+            let j: usize;
+            match &node_map {
+                Some(map) => {
+                    i = *map.get(&edge.source()).unwrap() * n
+                        + *map.get(&edge.target()).unwrap();
+                    j = *map.get(&edge.source()).unwrap()
+                        + n * *map.get(&edge.target()).unwrap();
+                }
+                None => {
+                    i = edge.source().index() * n + edge.target().index();
+                    j = edge.source().index() + n * edge.target().index();
+                }
+            }
+            matrix.put(i);
+            if !self.graph.is_directed() {
+                matrix.put(j);
+            }
+        }
+        matrix
     }
+
     fn is_adjacent(
         &self,
         matrix: &Self::AdjMatrix,
         a: NodeIndex,
         b: NodeIndex,
     ) -> bool {
-        self.graph.is_adjacent(matrix, a, b)
+        let node_map: Option<HashMap<NodeIndex, usize>>;
+        let mut node_hash_map: HashMap<NodeIndex, usize> = HashMap::new();
+        let n: usize;
+        if self.node_removed {
+            let mut count = 0;
+            for node in self.graph.node_indices() {
+                node_hash_map.insert(node, count);
+                count += 1;
+            }
+            node_map = Some(node_hash_map);
+            n = count
+        } else {
+            node_map = None;
+            n = self.graph.node_bound();
+        }
+        match node_map {
+            Some(node_map) => {
+                let index =
+                    n * *node_map.get(&a).unwrap() + *node_map.get(&b).unwrap();
+                matrix.contains(index)
+            }
+            None => self.graph.is_adjacent(matrix, a, b),
+        }
     }
 }
 
@@ -1065,4 +1126,37 @@ fn is_cycle_check_required(
     parents_a.next().is_some()
         && children_b.next().is_some()
         && dag.graph.find_edge(a, b).is_none()
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_adjacency_matrix() {
+        let mut graph = PyDiGraph::new(false);
+        let gil = Python::acquire_gil();
+        let py = gil.python();
+        let node_a = graph.add_node(py.None()).unwrap();
+        let node_b = graph.add_child(0, py.None(), py.None()).unwrap();
+        let adj_matrix = graph.adjacency_matrix();
+        assert_eq!(adj_matrix.len(), 4);
+        assert!(graph.is_adjacent(&adj_matrix, NodeIndex::new(node_a), NodeIndex::new(node_b)));
+    }
+
+    #[test]
+    fn test_adjacency_matrix_with_holes() {
+        let mut graph = PyDiGraph::new(false);
+        let gil = Python::acquire_gil();
+        let py = gil.python();
+        let node_a = graph.add_node(py.None()).unwrap();
+        let temp_node_a = graph.add_node(py.None()).unwrap();
+        let temp_node_b = graph.add_node(py.None()).unwrap();
+        let node_b = graph.add_child(0, py.None(), py.None()).unwrap();
+        graph.remove_node(temp_node_a).unwrap();
+        graph.remove_node(temp_node_b).unwrap();
+        let adj_matrix = graph.adjacency_matrix();
+        assert_eq!(adj_matrix.len(), 4);
+        assert!(graph.is_adjacent(&adj_matrix, NodeIndex::new(node_a), NodeIndex::new(node_b)));
+    }
 }
