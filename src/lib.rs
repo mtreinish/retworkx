@@ -926,6 +926,87 @@ fn digraph_all_simple_paths(
     Ok(result)
 }
 
+/// Find the 
+#[pyfunction(as_undirected = false)]
+#[text_signature = "(graph, source, target, /, as_undirected=False)"]
+fn digraph_bidirectional_shortest_path(graph: &digraph::PyDiGraph, source: usize, target: usize, as_undirected: bool) -> PyResult<Vec<usize>> {
+    if source == target {
+        return Ok(Vec::new());
+    }
+    let mut forward_fringe: Vec<NodeIndex> = Vec::new();
+    forward_fringe.push(NodeIndex::new(source));
+    let mut reverse_fringe: Vec<NodeIndex> = Vec::new();
+    reverse_fringe.push(NodeIndex::new(target));
+
+    let mut predecessors: HashMap<NodeIndex, Option<NodeIndex>> = HashMap::new();
+    predecessors.insert(NodeIndex::new(source), None);
+    let mut successors: HashMap<NodeIndex, Option<NodeIndex>> = HashMap::new();
+    successors.insert(NodeIndex::new(target), None);
+
+    let generate_out_list = |pred: HashMap<NodeIndex, Option<NodeIndex>>, succ: HashMap<NodeIndex, Option<NodeIndex>>, node: NodeIndex| -> Vec<usize> {
+        let mut node_index = Some(node);
+        let mut out_vec: Vec<usize> = Vec::new();
+        while node_index.is_some() {
+            let this_index = node_index.unwrap();
+            out_vec.push(this_index.index());
+            node_index = Some(pred[&this_index].unwrap());
+        }
+        out_vec.reverse();
+        let last_index = NodeIndex::new(*out_vec.last().unwrap());
+        node_index = Some(succ[&last_index].unwrap());
+        while node_index.is_some() {
+            let this_index = node_index.unwrap();
+            out_vec.push(this_index.index());
+            node_index = Some(succ[&this_index].unwrap());
+        }
+        out_vec
+    };
+
+    while !forward_fringe.is_empty() && !reverse_fringe.is_empty() {
+        let this_level: Vec<NodeIndex>;
+        if forward_fringe.len() <= reverse_fringe.len() {
+            this_level = forward_fringe;
+            forward_fringe = Vec::new();
+            for node in this_level {
+                let neighbors_list = if as_undirected {
+                    graph.graph.neighbors(node)
+                } else {
+                    graph.graph.neighbors_directed(node, petgraph::Direction::Outgoing)
+                };
+                for neighbor in neighbors_list {
+                    if !predecessors.contains_key(&neighbor) {
+                        forward_fringe.push(neighbor);
+                        predecessors.insert(neighbor, Some(node));
+                    } else {
+                        return Ok(generate_out_list(predecessors, successors, neighbor));
+                    }
+                }
+            }
+        } else {
+            this_level = reverse_fringe;
+            reverse_fringe = Vec::new();
+            for node in this_level {
+                let neighbors_list = if as_undirected {
+                    graph.graph.neighbors(node)
+                } else {
+                    graph.graph.neighbors_directed(node, petgraph::Direction::Incoming)
+                };
+                for neighbor in neighbors_list {
+                    if !successors.contains_key(&neighbor) {
+                        successors.insert(neighbor, Some(node));
+                        reverse_fringe.push(neighbor);
+
+                    } else {
+                        return Ok(generate_out_list(predecessors, successors, neighbor));
+                    }
+                }
+            }
+        }
+    }
+    Err(NoPathFound::py_err(
+                  "No path found that satisfies goal_fn",))
+}
+
 /// Compute the lengths of the shortest paths for a PyGraph object using
 /// Dijkstra's algorithm
 ///
@@ -1490,6 +1571,7 @@ fn retworkx(py: Python<'_>, m: &PyModule) -> PyResult<()> {
     m.add_wrapped(wrap_pyfunction!(graph_adjacency_matrix))?;
     m.add_wrapped(wrap_pyfunction!(graph_all_simple_paths))?;
     m.add_wrapped(wrap_pyfunction!(digraph_all_simple_paths))?;
+    m.add_wrapped(wrap_pyfunction!(digraph_bidirectional_shortest_path))?;
     m.add_wrapped(wrap_pyfunction!(graph_dijkstra_shortest_path_lengths))?;
     m.add_wrapped(wrap_pyfunction!(digraph_dijkstra_shortest_path_lengths))?;
     m.add_wrapped(wrap_pyfunction!(graph_astar_shortest_path))?;
