@@ -1464,6 +1464,231 @@ pub fn undirected_gnp_random_graph(
     Ok(graph)
 }
 
+fn graph_edges_dfs(
+    graph: &graph::PyGraph,
+    source: usize,
+) -> Vec<(NodeIndex, NodeIndex)> {
+    let mut dfs_edges: Vec<(NodeIndex, NodeIndex)> = Vec::new();
+    let mut stack: Vec<NodeIndex> = Vec::new();
+    let start_index = NodeIndex::new(source);
+    let mut visited: HashSet<NodeIndex> = HashSet::new();
+    let mut visited_edges: HashSet<EdgeIndex> = HashSet::new();
+    stack.push(start_index);
+    let mut edges: HashMap<NodeIndex, graph::Edges<PyObject>> = HashMap::new();
+    while !stack.is_empty() {
+        let current_node = stack.last().unwrap();
+        if !visited.contains(current_node) {
+            edges.insert(*current_node, graph.graph.edges(*current_node));
+            visited.insert(*current_node);
+        }
+        let edges_for_node = edges.get_mut(current_node).unwrap();
+        let edge = match edges_for_node.next() {
+            Some(edge) => edge,
+            None => {
+                stack.pop();
+                continue;
+            }
+        };
+        if !visited_edges.contains(&edge.id()) {
+            visited_edges.insert(edge.id());
+            stack.push(edge.target());
+            dfs_edges.push((edge.source(), edge.target()));
+        }
+    }
+    dfs_edges
+}
+
+#[pyfunction]
+pub fn graph_edge_dfs(
+    graph: &graph::PyGraph,
+    source: usize,
+) -> Vec<(usize, usize)> {
+    graph_edges_dfs(graph, source)
+        .iter()
+        .map(|(source, target)| (source.index(), target.index()))
+        .collect()
+}
+
+#[pyfunction]
+pub fn graph_find_cycle(
+    graph: &graph::PyGraph,
+    source: usize,
+) -> Vec<(usize, usize)> {
+    let mut visited: HashSet<NodeIndex> = HashSet::new();
+    let mut cycle: Vec<(NodeIndex, NodeIndex)> = Vec::new();
+    let mut active_nodes: HashSet<NodeIndex> = HashSet::new();
+    let mut previous_head: Option<NodeIndex> = None;
+    let mut edges: Vec<(NodeIndex, NodeIndex)> = Vec::new();
+    let mut final_node: Option<NodeIndex> = None;
+    visited.insert(NodeIndex::new(source));
+    for edge in graph_edges_dfs(graph, source) {
+        if visited.contains(&edge.1) {
+            continue;
+        }
+        if previous_head.is_some() && Some(edge.1) != previous_head {
+            loop {
+                if edges.is_empty() {
+                    edges = Vec::new();
+                    active_nodes = HashSet::new();
+                    active_nodes.insert(edge.0);
+                    break;
+                }
+                let popped_edge = edges.pop().unwrap();
+                active_nodes.remove(&popped_edge.1);
+                if !edges.is_empty() {
+                    if edge.0 == edges.last().unwrap().1 {
+                        break;
+                    }
+                }
+            }
+        }
+        edges.push(edge);
+        if active_nodes.contains(&edge.1) {
+            cycle.append(&mut edges);
+            final_node = Some(edge.1);
+            break;
+        } else {
+            visited.insert(edge.1);
+            active_nodes.insert(edge.1);
+            previous_head = Some(edge.1);
+        }
+    }
+    let mut start_index = 0;
+    for (index, edge) in cycle.iter().enumerate() {
+        if Some(edge.0) == final_node {
+            start_index = index;
+            break;
+        }
+    }
+    cycle[start_index..]
+        .iter()
+        .map(|(source, target)| (source.index(), target.index()))
+        .collect()
+}
+
+fn digraph_edges_dfs(
+    graph: &digraph::PyDiGraph,
+    source: Option<Vec<usize>>,
+) -> Vec<(NodeIndex, NodeIndex)> {
+    let nodes: Vec<NodeIndex> = match source {
+        Some(source) => source.iter().map(|node| NodeIndex::new(*node)).collect(),
+        None => graph.graph.node_indices().collect(),
+    };
+    let mut dfs_edges: Vec<(NodeIndex, NodeIndex)> = Vec::new();
+    let mut visited_nodes: HashSet<NodeIndex> = HashSet::new();
+    let mut visited_edges: HashSet<EdgeIndex> = HashSet::new();
+    let mut edges: HashMap<NodeIndex, digraph::Edges<PyObject>> =
+        HashMap::new();
+
+    for start_index in nodes {
+        let mut stack: Vec<NodeIndex> = Vec::new();
+        stack.push(start_index);
+        while !stack.is_empty() {
+            let current_node = stack.last().unwrap();
+            if !visited_nodes.contains(current_node) {
+                edges.insert(
+                    *current_node,
+                    graph.graph.edges_directed(
+                        *current_node,
+                        petgraph::Direction::Outgoing,
+                    ),
+                );
+                visited_nodes.insert(*current_node);
+            }
+            let edges_for_node = edges.get_mut(current_node).unwrap();
+            let edge = match edges_for_node.next() {
+                Some(edge) => edge,
+                None => {
+                    stack.pop();
+                    continue;
+                }
+            };
+            if !visited_edges.contains(&edge.id()) {
+                visited_edges.insert(edge.id());
+                stack.push(edge.target());
+                dfs_edges.push((edge.source(), edge.target()));
+            }
+        }
+    }
+    dfs_edges
+}
+
+#[pyfunction]
+pub fn digraph_edge_dfs(
+    graph: &digraph::PyDiGraph,
+    source: Option<Vec<usize>>,
+) -> Vec<(usize, usize)> {
+    digraph_edges_dfs(graph, source)
+        .iter()
+        .map(|(source, target)| (source.index(), target.index()))
+        .collect()
+}
+
+#[pyfunction]
+pub fn digraph_find_cycle(
+    graph: &digraph::PyDiGraph,
+    source: Option<Vec<usize>>,
+) -> Vec<(usize, usize)> {
+    let mut visited: HashSet<NodeIndex> = HashSet::new();
+    let mut cycle: Vec<(NodeIndex, NodeIndex)> = Vec::new();
+    let mut active_nodes: HashSet<NodeIndex> = HashSet::new();
+    let mut previous_head: Option<NodeIndex> = None;
+    let mut edges: Vec<(NodeIndex, NodeIndex)> = Vec::new();
+    let mut final_node: Option<NodeIndex> = None;
+    let nodes: Vec<usize> = match source{
+        Some(nodes) => nodes,
+        None => graph.graph.node_indices().map(|node| node.index()).collect(),
+    };
+    for node in nodes {
+        visited.insert(NodeIndex::new(node));
+        let mut node_list: Vec<usize> = Vec::new();
+        node_list.push(node);
+        for edge in digraph_edges_dfs(graph, Some(node_list)) {
+            if visited.contains(&edge.1) {
+                continue;
+            }
+            if previous_head.is_some() && Some(edge.1) != previous_head {
+                loop {
+                    if edges.is_empty() {
+                        edges = Vec::new();
+                        active_nodes = HashSet::new();
+                        active_nodes.insert(edge.0);
+                        break;
+                    }
+                    let popped_edge = edges.pop().unwrap();
+                    active_nodes.remove(&popped_edge.1);
+                    if !edges.is_empty() {
+                        if edge.0 == edges.last().unwrap().1 {
+                            break;
+                        }
+                    }
+                }
+            }
+            edges.push(edge);
+            if active_nodes.contains(&edge.1) {
+                cycle.append(&mut edges);
+                final_node = Some(edge.1);
+                break;
+            } else {
+                visited.insert(edge.1);
+                active_nodes.insert(edge.1);
+                previous_head = Some(edge.1);
+            }
+        }
+    }
+    let mut start_index = 0;
+    for (index, edge) in cycle.iter().enumerate() {
+        if Some(edge.0) == final_node {
+            start_index = index;
+            break;
+        }
+    }
+    cycle[start_index..]
+        .iter()
+        .map(|(source, target)| (source.index(), target.index()))
+        .collect()
+}
+
 /// Return a list of cycles which form a basis for cycles of a given PyGraph
 ///
 /// A basis for cycles of a graph is a minimal collection of
@@ -1628,6 +1853,10 @@ fn retworkx(py: Python<'_>, m: &PyModule) -> PyResult<()> {
     m.add_wrapped(wrap_pyfunction!(undirected_gnp_random_graph))?;
     m.add_wrapped(wrap_pyfunction!(cycle_basis))?;
     m.add_wrapped(wrap_pyfunction!(strongly_connected_components))?;
+    m.add_wrapped(wrap_pyfunction!(graph_find_cycle))?;
+    m.add_wrapped(wrap_pyfunction!(digraph_find_cycle))?;
+    m.add_wrapped(wrap_pyfunction!(graph_edge_dfs))?;
+    m.add_wrapped(wrap_pyfunction!(digraph_edge_dfs))?;
     m.add_class::<digraph::PyDiGraph>()?;
     m.add_class::<graph::PyGraph>()?;
     m.add_wrapped(wrap_pymodule!(generators))?;
