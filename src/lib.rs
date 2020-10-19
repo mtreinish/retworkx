@@ -210,7 +210,7 @@ pub fn weakly_connected_components(
 #[text_signature = "(graph, /)"]
 pub fn is_weakly_connected(graph: &digraph::PyDiGraph) -> PyResult<bool> {
     if graph.graph.node_count() == 0 {
-        return Err(NullGraph::py_err("Invalid operation on a NullGraph"));
+        return Err(NullGraph::new_err("Invalid operation on a NullGraph"));
     }
     Ok(weakly_connected_components(graph)[0].len() == graph.graph.node_count())
 }
@@ -2422,9 +2422,9 @@ create_exception!(retworkx, DAGHasCycle, PyException);
 // No neighbors found matching the provided predicate.
 create_exception!(retworkx, NoSuitableNeighbors, PyException);
 // No path was found between the specified nodes.
-create_exception!(retworkx, NoPathFound, Exception);
+create_exception!(retworkx, NoPathFound, PyException);
 // Invalid operation on a null graph
-create_exception!(retworkx, NullGraph, Exception);
+create_exception!(retworkx, NullGraph, PyException);
 
 #[pymodule]
 fn retworkx(py: Python<'_>, m: &PyModule) -> PyResult<()> {
