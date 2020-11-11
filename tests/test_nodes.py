@@ -324,3 +324,21 @@ class TestNodes(unittest.TestCase):
         res = graph.nodes()
         self.assertEqual(['a', 'b', 'c'], res)
         self.assertEqual([0, 1, 2], graph.node_indexes())
+
+    def test_find_node_by_weight(self):
+        graph = retworkx.PyDiGraph()
+        graph.add_nodes_from(list(range(10)))
+        res = graph.find_node_by_weight(9)
+        self.assertEqual(res, 9)
+
+    def test_find_node_by_weight_no_match(self):
+        graph = retworkx.PyDiGraph()
+        graph.add_nodes_from(list(range(10)))
+        res = graph.find_node_by_weight(42)
+        self.assertEqual(res, None)
+
+    def test_find_node_by_weight_multiple_matches(self):
+        graph = retworkx.PyDiGraph()
+        graph.add_nodes_from(['a', 'a'])
+        res = graph.find_node_by_weight('a')
+        self.assertEqual(res, 0)
