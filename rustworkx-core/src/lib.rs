@@ -51,6 +51,7 @@
 //! * [`max_weight_matching`](./max_weight_matching/index.html)
 //! * [`shortest_path`](./shortest_path/index.html)
 //! * [`traversal`](./traversal/index.html)
+//! * [`flow`](./flow/index.html)
 //!
 //! ## Release Notes
 //!
@@ -71,6 +72,7 @@ pub type Result<T, E = Infallible> = core::result::Result<T, E>;
 /// Module for centrality algorithms.
 pub mod centrality;
 pub mod connectivity;
+pub mod flow;
 /// Module for maximum weight matching algorithms.
 pub mod max_weight_matching;
 pub mod planar;
