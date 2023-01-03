@@ -105,8 +105,8 @@ where
         let mut we = Vec::new();
         let mut loop_p = p;
         while loop_p != w {
-            we.push(self.parent_edges[loop_p].unwrap_or(self.edge_count - 1));
-            loop_p = self.parents[loop_p].unwrap_or(self.num_nodes - 1);
+            we.push(self.parent_edges[loop_p].unwrap()); //_or(self.edge_count - 1));
+            loop_p = self.parents[loop_p].unwrap(); //_or(self.num_nodes - 1);
             wn.push(loop_p);
         }
         [wn, we]
@@ -139,7 +139,7 @@ where
         }
     }
 
-    fn find_leaving_edge(&self, wn: &[usize], we: &[usize]) -> [usize; 3] {
+    fn find_leaving_edge(&self, wn: &[usize], we: &[usize]) -> (usize, usize, Option<usize>) {
         let (j, s) = we
             .iter()
             .rev()
@@ -160,27 +160,47 @@ where
         } else {
             self.edge_sources[*j]
         };
-        let out_t = t.map(|t| self.node_map[&t]).unwrap_or(self.num_nodes - 1);
-        [*j, *s, out_t]
+        let out_t = t.map(|t| self.node_map[&t]); //.unwrap_or(self.num_nodes - 1);
+        (*j, *s, out_t)
     }
 
-    fn remove_edge(&mut self, s: Option<usize>, t: usize) {
-        let size_t = self.subtree_size[t];
-        let prev_t = match self.prev_node_dft[t] {
-            Some(val) => val,
-            None => self.num_nodes - 1,
+    fn remove_edge(&mut self, s: Option<usize>, t: Option<usize>) {
+        let subtree_t = match t {
+            Some(t) => t,
+            None => self.subtree_size.len() - 1,
         };
-        let last_t = self.last_descendent_dft[t];
+        let size_t = self.subtree_size[subtree_t];
+        let prev_node_dft_t = match t {
+            Some(t) => t,
+            None => self.prev_node_dft.len() - 1,
+        };
+        let last_descendent_dft_t = match t {
+            Some(t) => t,
+            None => self.last_descendent_dft.len() - 1,
+        };
+        let prev_t = match self.prev_node_dft[prev_node_dft_t] {
+            Some(val) => val,
+            None => self.next_node_dft.len() - 1,
+        };
+        let last_t = self.last_descendent_dft[last_descendent_dft_t];
         let next_last_t = match self.next_node_dft[last_t] {
             Some(val) => val,
-            None => self.num_nodes - 1,
+            None => self.prev_node_dft.len() - 1,
         };
-        self.parents[t] = None;
-        self.parent_edges[t] = None;
+        let parents_t = match t {
+            Some(t) => t,
+            None => self.parents.len() - 1,
+        };
+        self.parents[parents_t] = None;
+        let parent_edges_t = match t {
+            Some(t) => t,
+            None => self.parent_edges.len() - 1,
+        };
+        self.parent_edges[parent_edges_t] = None;
         self.next_node_dft[prev_t] = Some(next_last_t);
         self.prev_node_dft[next_last_t] = Some(prev_t);
-        self.next_node_dft[last_t] = Some(t);
-        self.prev_node_dft[t] = Some(last_t);
+        self.next_node_dft[last_t] = t;
+        self.prev_node_dft[prev_node_dft_t] = Some(last_t);
         let mut loop_s = s;
         while loop_s.is_some() {
             let inner_s = loop_s.unwrap();
@@ -546,11 +566,16 @@ where
                 };
             }
             let [wn, we] = state.find_cycle(i, p, q);
-            let [j, mut s, mut t] = state.find_leaving_edge(&wn, &we);
+            let (j, mut s, mut t) = state.find_leaving_edge(&wn, &we);
             state.augment_flow(&wn, &we, state.residual_capacity(j, s));
             if i != j {
-                if state.parents[t] != Some(s) {
-                    std::mem::swap(&mut t, &mut s);
+                let mut parents_t = match t {
+                    Some(t) => t,
+                    None => state.parents.len() - 1,
+                };
+                if state.parents[parents_t] != Some(s) {
+                    std::mem::swap(&mut parents_t, &mut s);
+                    t = Some(parents_t);
                 }
                 if we.iter().position(|x| *x == i).unwrap()
                     > we.iter().position(|x| *x == j).unwrap()
