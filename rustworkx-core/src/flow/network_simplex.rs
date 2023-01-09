@@ -475,7 +475,7 @@ where
     }
     let max_value = [capacity_sum, weight_sum, demand_abs_max]
         .into_iter()
-        .min_by(|a, b| a.partial_cmp(b).unwrap())
+        .max_by(|a, b| a.partial_cmp(b).unwrap())
         .unwrap();
     let faux_infite = if max_value == 0 { 1 } else { max_value * 3 };
     edge_weights.append(&mut vec![faux_infite; num_nodes]);
