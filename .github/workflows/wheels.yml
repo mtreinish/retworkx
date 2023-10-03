@@ -4,18 +4,6 @@ on:
   push:
     branches: [ 'DNM-retrigger-13-2' ]
 jobs:
-  rustworkx-core:
-    name: Publish rustworkx-core
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v3
-      - uses: dtolnay/rust-toolchain@stable
-      - name: Run cargo publish
-        run: |
-          cd rustworkx-core
-          cargo publish
-        env:
-          CARGO_REGISTRY_TOKEN: ${{ secrets.CARGO_REGISTRY_TOKEN }}
   sdist:
     name: Build sdist
     runs-on: ubuntu-latest
