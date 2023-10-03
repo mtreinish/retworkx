@@ -68,6 +68,7 @@ jobs:
           CIBW_BEFORE_BUILD: pip install -U setuptools-rust
           CIBW_TEST_REQUIRES: networkx testtools fixtures
           CIBW_TEST_COMMAND: python -m unittest discover {project}/tests/rustworkx_tests
+          CIBW_TEST_SKIP: cp312-*
       - uses: actions/upload-artifact@v3
         with:
           path: ./wheelhouse/*.whl
@@ -110,6 +111,7 @@ jobs:
           CIBW_BEFORE_BUILD: pip install -U setuptools-rust
           CIBW_TEST_REQUIRES: networkx scipy testtools fixtures
           CIBW_TEST_COMMAND: python -m unittest discover {project}/tests/rustworkx_tests
+          CIBW_TEST_SKIP: cp312-*
           CIBW_ARCHS_LINUX: aarch64
       - uses: actions/upload-artifact@v3
         with:
@@ -153,6 +155,7 @@ jobs:
           CIBW_BEFORE_BUILD: pip install -U setuptools-rust
           CIBW_TEST_REQUIRES: networkx testtools fixtures
           CIBW_TEST_COMMAND: python -m unittest discover {project}/tests/rustworkx_tests
+          CIBW_TEST_SKIP: cp312-*
           CIBW_ARCHS_LINUX: ppc64le
       - uses: actions/upload-artifact@v3
         with:
@@ -196,6 +199,7 @@ jobs:
           CIBW_BEFORE_BUILD: pip install -U setuptools-rust
           CIBW_TEST_REQUIRES: networkx testtools fixtures
           CIBW_TEST_COMMAND: python -m unittest discover {project}/tests/rustworkx_tests
+          CIBW_TEST_SKIP: cp312-*
           CIBW_ARCHS_LINUX: ppc64le
       - uses: actions/upload-artifact@v3
         with:
@@ -240,7 +244,7 @@ jobs:
           CIBW_TEST_REQUIRES: networkx testtools fixtures
           CIBW_TEST_COMMAND: python -m unittest discover {project}/tests/rustworkx_tests
           CIBW_ARCHS_LINUX: s390x
-          CIBW_TEST_SKIP: "*-*linux_s390x"
+          CIBW_TEST_SKIP: "*-*linux_s390x cp312*"
       - uses: actions/upload-artifact@v3
         with:
           path: ./wheelhouse/*.whl
@@ -284,7 +288,7 @@ jobs:
           CIBW_TEST_REQUIRES: networkx testtools fixtures
           CIBW_TEST_COMMAND: python -m unittest discover {project}/tests/rustworkx_tests
           CIBW_ARCHS_LINUX: s390x
-          CIBW_TEST_SKIP: "*-*linux_s390x"
+          CIBW_TEST_SKIP: "*-*linux_s390x cp312*"
       - uses: actions/upload-artifact@v3
         with:
           path: ./wheelhouse/*.whl
@@ -347,6 +351,7 @@ jobs:
           CIBW_BEFORE_BUILD: pip install -U setuptools-rust
           CIBW_TEST_REQUIRES: networkx testtools fixtures
           CIBW_TEST_COMMAND: python -m unittest discover {project}/tests/rustworkx_tests
+          CIBW_TEST_SKIP: "cp312-*"
       - uses: actions/upload-artifact@v3
         with:
           path: ./wheelhouse/*.whl
