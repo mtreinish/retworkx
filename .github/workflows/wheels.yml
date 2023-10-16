@@ -2,21 +2,8 @@
 name: Wheel Builds
 on:
   push:
-    tags:
-      - '*'
+    branches: [dnm-test-publish-to-pypi-again-test]
 jobs:
-  rustworkx-core:
-    name: Publish rustworkx-core
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v3
-      - uses: dtolnay/rust-toolchain@stable
-      - name: Run cargo publish
-        run: |
-          cd rustworkx-core
-          cargo publish
-        env:
-          CARGO_REGISTRY_TOKEN: ${{ secrets.CARGO_REGISTRY_TOKEN }}
   sdist:
     name: Build sdist
     runs-on: ubuntu-latest
@@ -39,6 +26,8 @@ jobs:
           path: ./dist/*
       - name: Publish package distributions to PyPI
         uses: pypa/gh-action-pypi-publish@release/v1
+        with:
+          repository-url: https://test.pypi.org/legacy/
   build_wheels:
     name: Build wheels on ${{ matrix.os }}
     runs-on: ${{ matrix.os }}
@@ -80,6 +69,7 @@ jobs:
         uses: pypa/gh-action-pypi-publish@release/v1
         with:
           packages-dir: deploy
+          repository-url: https://test.pypi.org/legacy/
   build_wheels_aarch64:
     name: Build wheels on ${{ matrix.os }}
     runs-on: ${{ matrix.os }}
@@ -117,6 +107,7 @@ jobs:
         uses: pypa/gh-action-pypi-publish@release/v1
         with:
           packages-dir: wheelhouse/
+          repository-url: https://test.pypi.org/legacy/
   build_wheels_aarch64_part_2:
     name: Build wheels on ${{ matrix.os }}
     runs-on: ${{ matrix.os }}
@@ -154,6 +145,7 @@ jobs:
         uses: pypa/gh-action-pypi-publish@release/v1
         with:
           packages-dir: wheelhouse/
+          repository-url: https://test.pypi.org/legacy/
   build_wheels_ppc64le:
     name: Build wheels on ${{ matrix.os }}
     runs-on: ${{ matrix.os }}
@@ -191,6 +183,7 @@ jobs:
         uses: pypa/gh-action-pypi-publish@release/v1
         with:
           packages-dir: wheelhouse/
+          repository-url: https://test.pypi.org/legacy/
   build_wheels_ppc64le_part2:
     name: Build wheels on ${{ matrix.os }}
     runs-on: ${{ matrix.os }}
@@ -228,6 +221,7 @@ jobs:
         uses: pypa/gh-action-pypi-publish@release/v1
         with:
           packages-dir: wheelhouse/
+          repository-url: https://test.pypi.org/legacy/
   build_wheels_s390x:
     name: Build wheels on ${{ matrix.os }}
     runs-on: ${{ matrix.os }}
@@ -265,6 +259,7 @@ jobs:
         uses: pypa/gh-action-pypi-publish@release/v1
         with:
           packages-dir: wheelhouse/
+          repository-url: https://test.pypi.org/legacy/
   build_wheels_s390x_part2:
     name: Build wheels on ${{ matrix.os }}
     runs-on: ${{ matrix.os }}
@@ -302,6 +297,7 @@ jobs:
         uses: pypa/gh-action-pypi-publish@release/v1
         with:
           packages-dir: wheelhouse/
+          repository-url: https://test.pypi.org/legacy/
   build-mac-arm-wheels:
     name: Build wheels on macos for arm and universal2
     runs-on: macos-latest
@@ -371,3 +367,5 @@ jobs:
           path: ./dist/*
       - name: Publish package distributions to PyPI
         uses: pypa/gh-action-pypi-publish@release/v1
+        with:
+          repository-url: https://test.pypi.org/legacy/
