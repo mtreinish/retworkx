@@ -12,24 +12,24 @@
 
 import unittest
 
-import retworkx
+import rustworkx
 
 
 class TestNumShortestpath(unittest.TestCase):
     def test_num_shortest_path_unweighted(self):
-        graph = retworkx.PyGraph()
+        graph = rustworkx.PyGraph()
         node_a = graph.add_node(0)
         node_b = graph.add_node("end")
         for i in range(3):
             node = graph.add_node(i)
             graph.add_edge(node_a, node, None)
             graph.add_edge(node, node_b, None)
-        res = retworkx.graph_num_shortest_paths_unweighted(graph, node_a)
+        res = rustworkx.graph_num_shortest_paths_unweighted(graph, node_a)
         expected = {2: 1, 4: 1, 3: 1, 1: 3}
         self.assertEqual(expected, res)
 
     def test_parallel_paths(self):
-        graph = retworkx.PyGraph()
+        graph = rustworkx.PyGraph()
         graph.extend_from_edge_list(
             [
                 (0, 1),
@@ -40,7 +40,7 @@ class TestNumShortestpath(unittest.TestCase):
                 (5, 3),
             ]
         )
-        res = retworkx.num_shortest_paths_unweighted(graph, 0)
+        res = rustworkx.num_shortest_paths_unweighted(graph, 0)
         expected = {
             1: 1,
             2: 1,
@@ -62,8 +62,8 @@ class TestNumShortestpath(unittest.TestCase):
         |   |   |   |   |
         20- 21- 22- 23- 24
         """
-        graph = retworkx.generators.grid_graph(5, 5)
-        res = retworkx.num_shortest_paths_unweighted(graph, 0)
+        graph = rustworkx.generators.grid_graph(5, 5)
+        res = rustworkx.num_shortest_paths_unweighted(graph, 0)
         expected = {
             1: 1,
             2: 1,
@@ -93,17 +93,17 @@ class TestNumShortestpath(unittest.TestCase):
         self.assertEqual(expected, res)
 
     def test_node_with_no_path(self):
-        graph = retworkx.generators.path_graph(5)
+        graph = rustworkx.generators.path_graph(5)
         graph.extend_from_edge_list([(6, 7), (7, 8), (8, 9), (9, 10), (10, 11)])
         expected = {1: 1, 2: 1, 3: 1, 4: 1}
-        res = retworkx.num_shortest_paths_unweighted(graph, 0)
+        res = rustworkx.num_shortest_paths_unweighted(graph, 0)
         self.assertEqual(expected, res)
-        res = retworkx.num_shortest_paths_unweighted(graph, 6)
+        res = rustworkx.num_shortest_paths_unweighted(graph, 6)
         expected = {7: 1, 8: 1, 9: 1, 10: 1, 11: 1}
         self.assertEqual(expected, res)
 
     def test_node_indices_with_holes(self):
-        graph = retworkx.generators.path_graph(5)
+        graph = rustworkx.generators.path_graph(5)
         graph.extend_from_edge_list([(6, 7), (7, 8), (8, 9), (9, 10), (10, 11)])
         graph.add_edge(4, 6, None)
         graph.remove_node(5)
@@ -119,20 +119,20 @@ class TestNumShortestpath(unittest.TestCase):
             10: 1,
             11: 1,
         }
-        res = retworkx.num_shortest_paths_unweighted(graph, 0)
+        res = rustworkx.num_shortest_paths_unweighted(graph, 0)
         self.assertEqual(expected, res)
 
     def test_no_edges(self):
-        graph = retworkx.PyGraph()
+        graph = rustworkx.PyGraph()
         graph.add_node(0)
         graph.add_node(1)
-        res = retworkx.num_shortest_paths_unweighted(graph, 0)
+        res = rustworkx.num_shortest_paths_unweighted(graph, 0)
         self.assertEqual({}, res)
 
     def test_invalid_source_index(self):
-        graph = retworkx.PyGraph()
+        graph = rustworkx.PyGraph()
         graph.add_node(0)
         graph.add_node(1)
         graph.add_edge(0, 1, None)
         with self.assertRaises(IndexError):
-            retworkx.num_shortest_paths_unweighted(graph, 4)
+            rustworkx.num_shortest_paths_unweighted(graph, 4)

@@ -11,46 +11,46 @@
 # under the License.
 
 import unittest
-import retworkx
+import rustworkx
 
 
 class TestMatching(unittest.TestCase):
     def test_valid(self):
-        graph = retworkx.generators.path_graph(4)
+        graph = rustworkx.generators.path_graph(4)
         matching = {(0, 1), (2, 3)}
-        self.assertTrue(retworkx.is_maximal_matching(graph, matching))
+        self.assertTrue(rustworkx.is_maximal_matching(graph, matching))
 
     def test_not_matching(self):
-        graph = retworkx.generators.path_graph(4)
+        graph = rustworkx.generators.path_graph(4)
         matching = {(0, 1), (1, 2), (2, 3)}
-        self.assertFalse(retworkx.is_maximal_matching(graph, matching))
+        self.assertFalse(rustworkx.is_maximal_matching(graph, matching))
 
     def test_not_maximal(self):
-        graph = retworkx.generators.path_graph(4)
+        graph = rustworkx.generators.path_graph(4)
         matching = {(0, 1)}
-        self.assertFalse(retworkx.is_maximal_matching(graph, matching))
+        self.assertFalse(rustworkx.is_maximal_matching(graph, matching))
 
     def test_is_matching_empty(self):
-        graph = retworkx.generators.path_graph(4)
+        graph = rustworkx.generators.path_graph(4)
         matching = set()
-        self.assertTrue(retworkx.is_matching(graph, matching))
+        self.assertTrue(rustworkx.is_matching(graph, matching))
 
     def test_is_matching_single_edge(self):
-        graph = retworkx.generators.path_graph(4)
+        graph = rustworkx.generators.path_graph(4)
         matching = {(1, 2)}
-        self.assertTrue(retworkx.is_matching(graph, matching))
+        self.assertTrue(rustworkx.is_matching(graph, matching))
 
     def test_is_matching_valid(self):
-        graph = retworkx.generators.path_graph(4)
+        graph = rustworkx.generators.path_graph(4)
         matching = {(0, 1), (2, 3)}
-        self.assertTrue(retworkx.is_matching(graph, matching))
+        self.assertTrue(rustworkx.is_matching(graph, matching))
 
     def test_is_matching_invalid(self):
-        graph = retworkx.generators.path_graph(4)
+        graph = rustworkx.generators.path_graph(4)
         matching = {(0, 1), (1, 2), (2, 3)}
-        self.assertFalse(retworkx.is_matching(graph, matching))
+        self.assertFalse(rustworkx.is_matching(graph, matching))
 
     def test_is_matching_invalid_edge(self):
-        graph = retworkx.generators.path_graph(4)
+        graph = rustworkx.generators.path_graph(4)
         matching = {(0, 3), (1, 2)}
-        self.assertFalse(retworkx.is_matching(graph, matching))
+        self.assertFalse(rustworkx.is_matching(graph, matching))

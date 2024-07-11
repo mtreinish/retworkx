@@ -12,22 +12,22 @@
 
 import unittest
 
-import retworkx
+import rustworkx
 
 
 class TestCopy(unittest.TestCase):
     def test_copy_returns_graph(self):
-        graph_a = retworkx.PyGraph()
+        graph_a = rustworkx.PyGraph()
         node_a = graph_a.add_node("a_1")
         node_b = graph_a.add_node("a_2")
         graph_a.add_edge(node_a, node_b, "edge_1")
         node_c = graph_a.add_node("a_3")
         graph_a.add_edge(node_b, node_c, "edge_2")
         graph_b = graph_a.copy()
-        self.assertIsInstance(graph_b, retworkx.PyGraph)
+        self.assertIsInstance(graph_b, rustworkx.PyGraph)
 
     def test_copy_with_holes_returns_graph(self):
-        graph_a = retworkx.PyGraph()
+        graph_a = rustworkx.PyGraph()
         node_a = graph_a.add_node("a_1")
         node_b = graph_a.add_node("a_2")
         graph_a.add_edge(node_a, node_b, "edge_1")
@@ -35,16 +35,16 @@ class TestCopy(unittest.TestCase):
         graph_a.add_edge(node_b, node_c, "edge_2")
         graph_a.remove_node(node_b)
         graph_b = graph_a.copy()
-        self.assertIsInstance(graph_b, retworkx.PyGraph)
+        self.assertIsInstance(graph_b, rustworkx.PyGraph)
         self.assertEqual([node_a, node_c], graph_b.node_indexes())
 
     def test_copy_empty(self):
-        graph = retworkx.PyGraph()
+        graph = rustworkx.PyGraph()
         empty_copy = graph.copy()
         self.assertEqual(len(empty_copy), 0)
 
     def test_copy_shared_ref(self):
-        graph_a = retworkx.PyGraph()
+        graph_a = rustworkx.PyGraph()
         node_a = graph_a.add_node({"a": 1})
         node_b = graph_a.add_node({"b": 2})
         graph_a.add_edge(node_a, node_b, {"edge": 1})

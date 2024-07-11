@@ -1,0 +1,26 @@
+[package]
+name = "rustworkx-core"
+description = "Rust APIs used for rustworkx algorithms"
+readme = "README.md"
+keywords = ["graph"]
+homepage = "https://github.com/Qiskit/rustworkx/tree/main/rustworkx-core"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+authors.workspace = true
+repository.workspace = true
+license.workspace = true
+
+[dependencies]
+ahash.workspace = true
+fixedbitset.workspace = true
+hashbrown.workspace = true
+indexmap.workspace = true
+ndarray.workspace = true
+num-traits.workspace = true
+petgraph.workspace = true
+priority-queue = "2.0"
+rand.workspace = true
+rand_pcg.workspace = true
+rayon.workspace = true
+rayon-cond = "0.3"

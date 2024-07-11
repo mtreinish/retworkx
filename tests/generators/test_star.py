@@ -12,26 +12,26 @@
 
 import unittest
 
-import retworkx
+import rustworkx
 
 
 class TestStarGraph(unittest.TestCase):
     def test_directed_star_graph(self):
-        graph = retworkx.generators.directed_star_graph(20)
+        graph = rustworkx.generators.directed_star_graph(20)
         self.assertEqual(len(graph), 20)
         self.assertEqual(len(graph.edges()), 19)
         expected_edges = [(0, i, None) for i in range(1, 20)]
         self.assertEqual(sorted(graph.out_edges(0)), sorted(expected_edges))
 
     def test_star_directed_graph_inward(self):
-        graph = retworkx.generators.directed_star_graph(20, inward=True)
+        graph = rustworkx.generators.directed_star_graph(20, inward=True)
         self.assertEqual(len(graph), 20)
         self.assertEqual(len(graph.edges()), 19)
         expected_edges = [(i, 0, None) for i in range(1, 20)]
         self.assertEqual(sorted(graph.in_edges(0)), sorted(expected_edges))
 
     def test_directed_star_graph_weights(self):
-        graph = retworkx.generators.directed_star_graph(weights=list(range(20)))
+        graph = rustworkx.generators.directed_star_graph(weights=list(range(20)))
         self.assertEqual(len(graph), 20)
         self.assertEqual([x for x in range(20)], graph.nodes())
         self.assertEqual(len(graph.edges()), 19)
@@ -39,7 +39,7 @@ class TestStarGraph(unittest.TestCase):
         self.assertEqual(sorted(graph.out_edges(0)), expected_edges)
 
     def test_directed_star_graph_bidirectional(self):
-        graph = retworkx.generators.directed_star_graph(20, bidirectional=True)
+        graph = rustworkx.generators.directed_star_graph(20, bidirectional=True)
         outw = []
         inw = []
         for i in range(1, 20):
@@ -51,9 +51,7 @@ class TestStarGraph(unittest.TestCase):
         self.assertEqual(graph.in_edges(0), inw[::-1])
 
     def test_directed_star_graph_bidirectional_inward(self):
-        graph = retworkx.generators.directed_star_graph(
-            20, bidirectional=True, inward=True
-        )
+        graph = rustworkx.generators.directed_star_graph(20, bidirectional=True, inward=True)
         outw = []
         inw = []
         for i in range(1, 20):
@@ -63,9 +61,7 @@ class TestStarGraph(unittest.TestCase):
             self.assertEqual(graph.in_edges(i), [(0, i, None)])
         self.assertEqual(graph.out_edges(0), outw[::-1])
         self.assertEqual(graph.in_edges(0), inw[::-1])
-        graph = retworkx.generators.directed_star_graph(
-            20, bidirectional=True, inward=False
-        )
+        graph = rustworkx.generators.directed_star_graph(20, bidirectional=True, inward=False)
         outw = []
         inw = []
         for i in range(1, 20):
@@ -77,9 +73,7 @@ class TestStarGraph(unittest.TestCase):
         self.assertEqual(graph.in_edges(0), inw[::-1])
 
     def test_star_directed_graph_weights_inward(self):
-        graph = retworkx.generators.directed_star_graph(
-            weights=list(range(20)), inward=True
-        )
+        graph = rustworkx.generators.directed_star_graph(weights=list(range(20)), inward=True)
         self.assertEqual(len(graph), 20)
         self.assertEqual([x for x in range(20)], graph.nodes())
         self.assertEqual(len(graph.edges()), 19)
@@ -88,19 +82,27 @@ class TestStarGraph(unittest.TestCase):
 
     def test_star_directed_no_weights_or_num(self):
         with self.assertRaises(IndexError):
-            retworkx.generators.directed_star_graph()
+            rustworkx.generators.directed_star_graph()
 
     def test_star_graph(self):
-        graph = retworkx.generators.star_graph(20)
+        graph = rustworkx.generators.star_graph(20)
         self.assertEqual(len(graph), 20)
         self.assertEqual(len(graph.edges()), 19)
 
     def test_star_graph_weights(self):
-        graph = retworkx.generators.star_graph(weights=list(range(20)))
+        graph = rustworkx.generators.star_graph(weights=list(range(20)))
         self.assertEqual(len(graph), 20)
         self.assertEqual([x for x in range(20)], graph.nodes())
         self.assertEqual(len(graph.edges()), 19)
 
     def test_star_no_weights_or_num(self):
         with self.assertRaises(IndexError):
-            retworkx.generators.star_graph()
+            rustworkx.generators.star_graph()
+
+    def test_zero_length_star_graph(self):
+        graph = rustworkx.generators.star_graph(0)
+        self.assertEqual(0, len(graph))
+
+    def test_zero_length_directed_star_graph(self):
+        graph = rustworkx.generators.directed_star_graph(0)
+        self.assertEqual(0, len(graph))

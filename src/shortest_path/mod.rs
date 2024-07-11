@@ -10,30 +10,37 @@
 // License for the specific language governing permissions and limitations
 // under the License.
 
+mod all_pairs_bellman_ford;
 pub mod all_pairs_dijkstra;
-mod astar;
 mod average_length;
-mod dijkstra;
 mod distance_matrix;
 mod floyd_warshall;
-mod k_shortest_path;
 mod num_shortest_path;
 
-use super::weight_callable;
-use crate::dictmap::*;
-use crate::{digraph, graph, NoPathFound};
+use std::convert::TryFrom;
+
+use crate::{digraph, edge_weights_from_callable, graph, CostFn, NegativeCycle, NoPathFound};
 
 use pyo3::prelude::*;
 use pyo3::Python;
 
 use petgraph::graph::NodeIndex;
+use petgraph::prelude::*;
+use petgraph::stable_graph::EdgeIndex;
 use petgraph::visit::NodeCount;
+use pyo3::exceptions::PyIndexError;
+use pyo3::exceptions::PyValueError;
 
 use numpy::IntoPyArray;
 
+use rustworkx_core::dictmap::*;
+use rustworkx_core::shortest_path::{
+    all_shortest_paths, astar, bellman_ford, dijkstra, k_shortest_path, negative_cycle_finder,
+};
+
 use crate::iterators::{
-    AllPairsPathLengthMapping, AllPairsPathMapping, NodeIndices,
-    NodesCountMapping, PathLengthMapping, PathMapping,
+    AllPairsPathLengthMapping, AllPairsPathMapping, NodeIndices, NodesCountMapping,
+    PathLengthMapping, PathMapping,
 };
 
 /// Find the shortest path from a node
@@ -55,8 +62,11 @@ use crate::iterators::{
 /// :return: Dictionary of paths. The keys are destination node indices and
 ///     the dict values are lists of node indices making the path.
 /// :rtype: dict
-#[pyfunction(default_weight = "1.0", as_undirected = "false")]
+/// :raises ValueError: when an edge weight with NaN or negative value
+///     is provided.
+#[pyfunction]
 #[pyo3(
+    signature=(graph, source, target=None, weight_fn=None, default_weight=1.0),
     text_signature = "(graph, source, /, target=None weight_fn=None, default_weight=1.0)"
 )]
 pub fn graph_dijkstra_shortest_paths(
@@ -68,25 +78,31 @@ pub fn graph_dijkstra_shortest_paths(
     default_weight: f64,
 ) -> PyResult<PathMapping> {
     let start = NodeIndex::new(source);
+    if !graph.graph.contains_node(start) {
+        return Err(PyIndexError::new_err(format!(
+            "Node source index \"{source}\" out of graph bound"
+        )));
+    }
+
     let goal_index: Option<NodeIndex> = target.map(NodeIndex::new);
-    let mut paths: DictMap<NodeIndex, Vec<NodeIndex>> =
-        DictMap::with_capacity(graph.node_count());
-    dijkstra::dijkstra(
+    let mut paths: DictMap<NodeIndex, Vec<NodeIndex>> = DictMap::with_capacity(graph.node_count());
+
+    let cost_fn = CostFn::try_from((weight_fn, default_weight))?;
+
+    (dijkstra(
         &graph.graph,
         start,
         goal_index,
-        |e| weight_callable(py, &weight_fn, e.weight(), default_weight),
+        |e| cost_fn.call(py, e.weight()),
         Some(&mut paths),
-    )?;
+    ) as PyResult<Vec<Option<f64>>>)?;
 
     Ok(PathMapping {
         paths: paths
             .iter()
             .filter_map(|(k, v)| {
                 let k_int = k.index();
-                if k_int == source
-                    || target.is_some() && target.unwrap() != k_int
-                {
+                if k_int == source || target.is_some() && target.unwrap() != k_int {
                     None
                 } else {
                     Some((
@@ -97,6 +113,78 @@ pub fn graph_dijkstra_shortest_paths(
             })
             .collect(),
     })
+}
+
+/// Find all shortest paths between two nodes
+///
+/// This function will generate all possible shortest paths from a source node to a
+/// target using Dijkstra's algorithm.
+///
+/// :param PyGraph graph:
+/// :param int source: The node index to find paths from
+/// :param int target: A target to find paths to
+/// :param weight_fn: An optional weight function for an edge. It will accept
+///     a single argument, the edge's weight object and will return a float which
+///     will be used to represent the weight/cost of the edge
+/// :param float default_weight: If ``weight_fn`` isn't specified this optional
+///     float value will be used for the weight/cost of each edge.
+///
+/// :return: List of paths. Each paths are lists of node indices,
+///     starting at ``source`` and ending at ``target``.
+/// :rtype: list
+/// :raises ValueError: when an edge weight with NaN or negative value
+///     is provided.
+#[pyfunction]
+#[pyo3(
+    signature=(graph, source, target, weight_fn=None, default_weight=1.0),
+    text_signature = "(graph, source, target, /, weight_fn=None, default_weight=1.0)"
+)]
+pub fn graph_all_shortest_paths(
+    py: Python,
+    graph: &graph::PyGraph,
+    source: usize,
+    target: usize,
+    weight_fn: Option<PyObject>,
+    default_weight: f64,
+) -> PyResult<Vec<Vec<usize>>> {
+    let start = NodeIndex::new(source);
+    let goal = NodeIndex::new(target);
+
+    let cost_fn = CostFn::try_from((weight_fn, default_weight))?;
+
+    let paths = (all_shortest_paths(&graph.graph, start, goal, |e| cost_fn.call(py, e.weight()))
+        as PyResult<Vec<Vec<NodeIndex>>>)?;
+
+    Ok(paths
+        .iter()
+        .map(|v| v.iter().map(|v| v.index()).collect())
+        .collect())
+}
+
+/// Check if a graph has a path between source and target nodes
+///
+/// :param PyGraph graph:
+/// :param int source: The node index to find paths from
+/// :param int target: The index of the target node
+///
+/// :return: True if a path exists, False if not.
+/// :rtype: bool
+/// :raises ValueError: when an edge weight with NaN or negative value
+///     is provided.
+#[pyfunction]
+#[pyo3(
+    signature=(graph, source, target),
+    text_signature = "(graph, source, target)"
+)]
+pub fn graph_has_path(
+    py: Python,
+    graph: &graph::PyGraph,
+    source: usize,
+    target: usize,
+) -> PyResult<bool> {
+    let path_mapping = graph_dijkstra_shortest_paths(py, graph, source, Some(target), None, 1.0)?;
+
+    Ok(!path_mapping.paths.is_empty())
 }
 
 /// Find the shortest path from a node
@@ -118,8 +206,11 @@ pub fn graph_dijkstra_shortest_paths(
 /// :return: Dictionary of paths. The keys are destination node indices and
 ///     the dict values are lists of node indices making the path.
 /// :rtype: dict
-#[pyfunction(default_weight = "1.0", as_undirected = "false")]
+/// :raises ValueError: when an edge weight with NaN or negative value
+///     is provided.
+#[pyfunction]
 #[pyo3(
+    signature=(graph, source, target=None, weight_fn=None, default_weight=1.0, as_undirected=false),
     text_signature = "(graph, source, /, target=None weight_fn=None, default_weight=1.0, as_undirected=False)"
 )]
 pub fn digraph_dijkstra_shortest_paths(
@@ -132,47 +223,135 @@ pub fn digraph_dijkstra_shortest_paths(
     as_undirected: bool,
 ) -> PyResult<PathMapping> {
     let start = NodeIndex::new(source);
+    if !graph.graph.contains_node(start) {
+        return Err(PyIndexError::new_err(format!(
+            "Node source index \"{source}\" out of graph bound"
+        )));
+    }
+
     let goal_index: Option<NodeIndex> = target.map(NodeIndex::new);
-    let mut paths: DictMap<NodeIndex, Vec<NodeIndex>> =
-        DictMap::with_capacity(graph.node_count());
+    let mut paths: DictMap<NodeIndex, Vec<NodeIndex>> = DictMap::with_capacity(graph.node_count());
+    let cost_fn = CostFn::try_from((weight_fn, default_weight))?;
+
     if as_undirected {
-        dijkstra::dijkstra(
+        (dijkstra(
             // TODO: Use petgraph undirected adapter after
             // https://github.com/petgraph/petgraph/pull/318 is available in
             // a petgraph release.
             &graph.to_undirected(py, true, None)?.graph,
             start,
             goal_index,
-            |e| weight_callable(py, &weight_fn, e.weight(), default_weight),
+            |e| cost_fn.call(py, e.weight()),
             Some(&mut paths),
-        )?;
+        ) as PyResult<Vec<Option<f64>>>)?;
     } else {
-        dijkstra::dijkstra(
+        (dijkstra(
             &graph.graph,
             start,
             goal_index,
-            |e| weight_callable(py, &weight_fn, e.weight(), default_weight),
+            |e| cost_fn.call(py, e.weight()),
             Some(&mut paths),
-        )?;
+        ) as PyResult<Vec<Option<f64>>>)?;
     }
     Ok(PathMapping {
         paths: paths
             .iter()
             .filter_map(|(k, v)| {
                 let k_int = k.index();
-                if k_int == source
-                    || target.is_some() && target.unwrap() != k_int
-                {
+                if k_int == source || target.is_some() && target.unwrap() != k_int {
                     None
                 } else {
-                    Some((
-                        k_int,
-                        v.iter().map(|x| x.index()).collect::<Vec<usize>>(),
-                    ))
+                    Some((k_int, v.iter().map(|x| x.index()).collect::<Vec<usize>>()))
                 }
             })
             .collect(),
     })
+}
+
+/// Find all shortest paths between two nodes
+///
+/// This function will generate all possible shortest paths from a source node to a
+/// target using Dijkstra's algorithm.
+///
+/// :param PyDiGraph graph:
+/// :param int source: The node index to find paths from
+/// :param int target: A target to find paths to
+/// :param weight_fn: An optional weight function for an edge. It will accept
+///     a single argument, the edge's weight object and will return a float which
+///     will be used to represent the weight/cost of the edge
+/// :param float default_weight: If ``weight_fn`` isn't specified this optional
+///     float value will be used for the weight/cost of each edge.
+///
+/// :return: List of paths. Each paths are lists of node indices,
+///     starting at ``source`` and ending at ``target``.
+/// :rtype: list
+/// :raises ValueError: when an edge weight with NaN or negative value
+///     is provided.
+#[pyfunction]
+#[pyo3(
+    signature=(graph, source, target, weight_fn=None, default_weight=1.0, as_undirected=false),
+    text_signature = "(graph, source, target, /, weight_fn=None, default_weight=1.0, as_undirected=False)"
+)]
+pub fn digraph_all_shortest_paths(
+    py: Python,
+    graph: &digraph::PyDiGraph,
+    source: usize,
+    target: usize,
+    weight_fn: Option<PyObject>,
+    default_weight: f64,
+    as_undirected: bool,
+) -> PyResult<Vec<Vec<usize>>> {
+    let start = NodeIndex::new(source);
+    let goal = NodeIndex::new(target);
+
+    let cost_fn = CostFn::try_from((weight_fn, default_weight))?;
+
+    let paths = if as_undirected {
+        (all_shortest_paths(
+            &graph.to_undirected(py, true, None)?.graph,
+            start,
+            goal,
+            |e| cost_fn.call(py, e.weight()),
+        ) as PyResult<Vec<Vec<NodeIndex>>>)?
+    } else {
+        (all_shortest_paths(&graph.graph, start, goal, |e| cost_fn.call(py, e.weight()))
+            as PyResult<Vec<Vec<NodeIndex>>>)?
+    };
+
+    Ok(paths
+        .iter()
+        .map(|v| v.iter().map(|v| v.index()).collect())
+        .collect())
+}
+
+/// Check if a digraph has a path between source and target nodes
+///
+/// :param PyDiGraph graph:
+/// :param int source: The node index to find paths from
+/// :param int target: The index of the target node
+/// :param bool as_undirected: If set to true the graph will be treated as
+///     undirected for finding a path
+///
+/// :return: True if a path exists, False if not.
+/// :rtype: bool
+/// :raises ValueError: when an edge weight with NaN or negative value
+///     is provided.
+#[pyfunction]
+#[pyo3(
+    signature=(graph, source, target, as_undirected=false),
+    text_signature = "(graph, source, target, /, as_undirected=false)"
+)]
+pub fn digraph_has_path(
+    py: Python,
+    graph: &digraph::PyDiGraph,
+    source: usize,
+    target: usize,
+    as_undirected: bool,
+) -> PyResult<bool> {
+    let path_mapping =
+        digraph_dijkstra_shortest_paths(py, graph, source, Some(target), None, 1.0, as_undirected)?;
+
+    Ok(!path_mapping.paths.is_empty())
 }
 
 /// Compute the lengths of the shortest paths for a PyGraph object using
@@ -193,6 +372,8 @@ pub fn digraph_dijkstra_shortest_paths(
 ///     the key is the node index of the end of the path and the value is the
 ///     cost/sum of the weights of path
 /// :rtype: PathLengthMapping
+/// :raises ValueError: when an edge weight with NaN or negative value
+///     is provided.
 #[pyfunction]
 #[pyo3(text_signature = "(graph, node, edge_cost_fn, /, goal=None)")]
 pub fn graph_dijkstra_shortest_path_lengths(
@@ -202,31 +383,46 @@ pub fn graph_dijkstra_shortest_path_lengths(
     edge_cost_fn: PyObject,
     goal: Option<usize>,
 ) -> PyResult<PathLengthMapping> {
-    let edge_cost_callable = |a: &PyObject| -> PyResult<f64> {
-        let res = edge_cost_fn.call1(py, (a,))?;
-        let raw = res.to_object(py);
-        raw.extract(py)
-    };
-
     let start = NodeIndex::new(node);
+    let edge_cost_callable = CostFn::from(edge_cost_fn);
     let goal_index: Option<NodeIndex> = goal.map(NodeIndex::new);
 
-    let res = dijkstra::dijkstra(
+    if !graph.graph.contains_node(start) {
+        return Err(PyIndexError::new_err(format!(
+            "Node source index \"{node}\" out of graph bound"
+        )));
+    }
+
+    let res: Vec<Option<f64>> = dijkstra(
         &graph.graph,
         start,
         goal_index,
-        |e| edge_cost_callable(e.weight()),
+        |e| edge_cost_callable.call(py, e.weight()),
         None,
     )?;
+
+    if let Some(goal_usize) = goal {
+        return Ok(PathLengthMapping {
+            path_lengths: match res[goal_usize] {
+                Some(goal_length) => {
+                    let mut ans = DictMap::new();
+                    ans.insert(goal_usize, goal_length);
+                    ans
+                }
+                None => DictMap::new(),
+            },
+        });
+    }
+
     Ok(PathLengthMapping {
         path_lengths: res
-            .iter()
-            .filter_map(|(k, v)| {
-                let k_int = k.index();
-                if k_int == node || goal.is_some() && goal.unwrap() != k_int {
-                    None
+            .into_iter()
+            .enumerate()
+            .filter_map(|(k_int, opt_v)| {
+                if k_int != node {
+                    opt_v.map(|v| (k_int, v))
                 } else {
-                    Some((k_int, *v))
+                    None
                 }
             })
             .collect(),
@@ -251,6 +447,8 @@ pub fn graph_dijkstra_shortest_path_lengths(
 ///     the key is the node index of the end of the path and the value is the
 ///     cost/sum of the weights of path
 /// :rtype: PathLengthMapping
+/// :raises ValueError: when an edge weight with NaN or negative value
+///     is provided.
 #[pyfunction]
 #[pyo3(text_signature = "(graph, node, edge_cost_fn, /, goal=None)")]
 pub fn digraph_dijkstra_shortest_path_lengths(
@@ -260,48 +458,64 @@ pub fn digraph_dijkstra_shortest_path_lengths(
     edge_cost_fn: PyObject,
     goal: Option<usize>,
 ) -> PyResult<PathLengthMapping> {
-    let edge_cost_callable = |a: &PyObject| -> PyResult<f64> {
-        let res = edge_cost_fn.call1(py, (a,))?;
-        let raw = res.to_object(py);
-        raw.extract(py)
-    };
+    let edge_cost_callable = CostFn::from(edge_cost_fn);
 
     let start = NodeIndex::new(node);
     let goal_index: Option<NodeIndex> = goal.map(NodeIndex::new);
 
-    let res = dijkstra::dijkstra(
+    if !graph.graph.contains_node(start) {
+        return Err(PyIndexError::new_err(format!(
+            "Node source index \"{node}\" out of graph bound"
+        )));
+    }
+
+    let res: Vec<Option<f64>> = dijkstra(
         &graph.graph,
         start,
         goal_index,
-        |e| edge_cost_callable(e.weight()),
+        |e| edge_cost_callable.call(py, e.weight()),
         None,
     )?;
+
+    if let Some(goal_usize) = goal {
+        return Ok(PathLengthMapping {
+            path_lengths: match res[goal_usize] {
+                Some(goal_length) => {
+                    let mut ans = DictMap::new();
+                    ans.insert(goal_usize, goal_length);
+                    ans
+                }
+                None => DictMap::new(),
+            },
+        });
+    }
+
     Ok(PathLengthMapping {
         path_lengths: res
-            .iter()
-            .filter_map(|(k, v)| {
-                let k_int = k.index();
-                if k_int == node || goal.is_some() && goal.unwrap() != k_int {
-                    None
+            .into_iter()
+            .enumerate()
+            .filter_map(|(k_int, opt_v)| {
+                if k_int != node {
+                    opt_v.map(|v| (k_int, v))
                 } else {
-                    Some((k_int, *v))
+                    None
                 }
             })
             .collect(),
     })
 }
 
-/// Calculate the the shortest length from all nodes in a
-/// :class:`~retworkx.PyDiGraph` object
+/// For each node in the graph, calculates the lengths of the shortest paths
+/// to all others in a :class:`~rustworkx.PyDiGraph` object
 ///
-/// This function will generate the shortest path from a source node using
-/// Dijkstra's algorithm. This function is multithreaded and will run
-/// launch a thread pool with threads equal to the number of CPUs by default.
-/// You can tune the number of threads with the ``RAYON_NUM_THREADS``
+/// This function will calculate the shortest path lengths from all nodes in the
+/// graph using Dijkstra's algorithm. This function is multithreaded and will
+/// launch a thread pool with threads equal to the number of CPUs by
+/// default. You can tune the number of threads with the ``RAYON_NUM_THREADS``
 /// environment variable. For example, setting ``RAYON_NUM_THREADS=4`` would
 /// limit the thread pool to 4 threads.
 ///
-/// :param graph: The input :class:`~retworkx.PyDiGraph` to use
+/// :param graph: The input :class:`~rustworkx.PyDiGraph` to use
 /// :param edge_cost_fn: A callable object that acts as a weight function for
 ///     an edge. It will accept a single positional argument, the edge's weight
 ///     object and will return a float which will be used to represent the
@@ -318,6 +532,8 @@ pub fn digraph_dijkstra_shortest_path_lengths(
 ///         }
 ///
 /// :rtype: AllPairsPathLengthMapping
+/// :raises ValueError: when an edge weight with NaN or negative value
+///     is provided.
 #[pyfunction]
 #[pyo3(text_signature = "(graph, edge_cost_fn, /)")]
 pub fn digraph_all_pairs_dijkstra_path_lengths(
@@ -325,24 +541,20 @@ pub fn digraph_all_pairs_dijkstra_path_lengths(
     graph: &digraph::PyDiGraph,
     edge_cost_fn: PyObject,
 ) -> PyResult<AllPairsPathLengthMapping> {
-    all_pairs_dijkstra::all_pairs_dijkstra_path_lengths(
-        py,
-        &graph.graph,
-        edge_cost_fn,
-    )
+    all_pairs_dijkstra::all_pairs_dijkstra_path_lengths(py, &graph.graph, edge_cost_fn)
 }
 
-/// Find the shortest path from all nodes in a :class:`~retworkx.PyDiGraph`
-/// object
+/// For each node in the graph, finds the shortest paths to all others in a
+/// :class:`~rustworkx.PyDiGraph` object
 ///
-/// This function will generate the shortest path from a source node using
+/// This function will generate the shortest paths from all nodes in the graph
 /// Dijkstra's algorithm. This function is multithreaded and will run
 /// launch a thread pool with threads equal to the number of CPUs by default.
 /// You can tune the number of threads with the ``RAYON_NUM_THREADS``
 /// environment variable. For example, setting ``RAYON_NUM_THREADS=4`` would
 /// limit the thread pool to 4 threads.
 ///
-/// :param graph: The input :class:`~retworkx.PyDiGraph` object to use
+/// :param graph: The input :class:`~rustworkx.PyDiGraph` object to use
 /// :param edge_cost_fn: A callable object that acts as a weight function for
 ///     an edge. It will accept a single positional argument, the edge's weight
 ///     object and will return a float which will be used to represent the
@@ -359,6 +571,8 @@ pub fn digraph_all_pairs_dijkstra_path_lengths(
 ///         }
 ///
 /// :rtype: AllPairsPathMapping
+/// :raises ValueError: when an edge weight with NaN or negative value
+///     is provided.
 #[pyfunction]
 #[pyo3(text_signature = "(graph, edge_cost_fn, /)")]
 pub fn digraph_all_pairs_dijkstra_shortest_paths(
@@ -366,21 +580,16 @@ pub fn digraph_all_pairs_dijkstra_shortest_paths(
     graph: &digraph::PyDiGraph,
     edge_cost_fn: PyObject,
 ) -> PyResult<AllPairsPathMapping> {
-    all_pairs_dijkstra::all_pairs_dijkstra_shortest_paths(
-        py,
-        &graph.graph,
-        edge_cost_fn,
-        None,
-    )
+    all_pairs_dijkstra::all_pairs_dijkstra_shortest_paths(py, &graph.graph, edge_cost_fn, None)
 }
 
-/// Calculate the the shortest length from all nodes in a
-/// :class:`~retworkx.PyGraph` object
+/// For each node in the graph, calculates the lengths of the shortest paths
+/// to all others in a :class:`~rustworkx.PyGraph` object
 ///
 /// This function will generate the shortest path from a source node using
 /// Dijkstra's algorithm.
 ///
-/// :param graph: The input :class:`~retworkx.PyGraph` to use
+/// :param graph: The input :class:`~rustworkx.PyGraph` to use
 /// :param edge_cost_fn: A callable object that acts as a weight function for
 ///     an edge. It will accept a single positional argument, the edge's weight
 ///     object and will return a float which will be used to represent the
@@ -397,6 +606,8 @@ pub fn digraph_all_pairs_dijkstra_shortest_paths(
 ///         }
 ///
 /// :rtype: AllPairsPathLengthMapping
+/// :raises ValueError: when an edge weight with NaN or negative value
+///     is provided.
 #[pyfunction]
 #[pyo3(text_signature = "(graph, edge_cost_fn, /)")]
 pub fn graph_all_pairs_dijkstra_path_lengths(
@@ -404,20 +615,16 @@ pub fn graph_all_pairs_dijkstra_path_lengths(
     graph: &graph::PyGraph,
     edge_cost_fn: PyObject,
 ) -> PyResult<AllPairsPathLengthMapping> {
-    all_pairs_dijkstra::all_pairs_dijkstra_path_lengths(
-        py,
-        &graph.graph,
-        edge_cost_fn,
-    )
+    all_pairs_dijkstra::all_pairs_dijkstra_path_lengths(py, &graph.graph, edge_cost_fn)
 }
 
-/// Find the shortest path from all nodes in a :class:`~retworkx.PyGraph`
-/// object
+/// For each node in the graph, finds the shortest paths to all others in a
+/// :class:`~rustworkx.PyGraph` object
 ///
 /// This function will generate the shortest path from a source node using
 /// Dijkstra's algorithm.
 ///
-/// :param graph: The input :class:`~retworkx.PyGraph` object to use
+/// :param graph: The input :class:`~rustworkx.PyGraph` object to use
 /// :param edge_cost_fn: A callable object that acts as a weight function for
 ///     an edge. It will accept a single positional argument, the edge's weight
 ///     object and will return a float which will be used to represent the
@@ -434,6 +641,8 @@ pub fn graph_all_pairs_dijkstra_path_lengths(
 ///         }
 ///
 /// :rtype: AllPairsPathMapping
+/// :raises ValueError: when an edge weight with NaN or negative value
+///     is provided.
 #[pyfunction]
 #[pyo3(text_signature = "(graph, edge_cost_fn, /)")]
 pub fn graph_all_pairs_dijkstra_shortest_paths(
@@ -441,12 +650,7 @@ pub fn graph_all_pairs_dijkstra_shortest_paths(
     graph: &graph::PyGraph,
     edge_cost_fn: PyObject,
 ) -> PyResult<AllPairsPathMapping> {
-    all_pairs_dijkstra::all_pairs_dijkstra_shortest_paths(
-        py,
-        &graph.graph,
-        edge_cost_fn,
-        None,
-    )
+    all_pairs_dijkstra::all_pairs_dijkstra_shortest_paths(py, &graph.graph, edge_cost_fn, None)
 }
 
 /// Compute the A* shortest path for a PyDiGraph
@@ -469,9 +673,11 @@ pub fn graph_all_pairs_dijkstra_shortest_paths(
 /// :return: The computed shortest path between node and finish as a list
 ///     of node indices.
 /// :rtype: NodeIndices
+/// :raises ValueError: when an edge weight with NaN or negative value
+///     is provided.
 #[pyfunction]
-#[pyo3(text_signature = "(graph, node, goal_fn, edge_cost, estimate_cost, /)")]
-fn digraph_astar_shortest_path(
+#[pyo3(text_signature = "(graph, node, goal_fn, edge_cost_fn, estimate_cost_fn, /)")]
+pub fn digraph_astar_shortest_path(
     py: Python,
     graph: &digraph::PyDiGraph,
     node: usize,
@@ -481,42 +687,30 @@ fn digraph_astar_shortest_path(
 ) -> PyResult<NodeIndices> {
     let goal_fn_callable = |a: &PyObject| -> PyResult<bool> {
         let res = goal_fn.call1(py, (a,))?;
-        let raw = res.to_object(py);
-        let output: bool = raw.extract(py)?;
+        let output: bool = res.extract(py)?;
         Ok(output)
     };
 
-    let edge_cost_callable = |a: &PyObject| -> PyResult<f64> {
-        let res = edge_cost_fn.call1(py, (a,))?;
-        let raw = res.to_object(py);
-        let output: f64 = raw.extract(py)?;
-        Ok(output)
-    };
-
-    let estimate_cost_callable = |a: &PyObject| -> PyResult<f64> {
-        let res = estimate_cost_fn.call1(py, (a,))?;
-        let raw = res.to_object(py);
-        let output: f64 = raw.extract(py)?;
-        Ok(output)
-    };
+    let edge_cost_callable = CostFn::from(edge_cost_fn);
+    let estimate_cost_callable = CostFn::from(estimate_cost_fn);
     let start = NodeIndex::new(node);
 
-    let astar_res = astar::astar(
+    if !graph.graph.contains_node(start) {
+        return Err(PyIndexError::new_err(format!(
+            "Node source index \"{node}\" out of graph bound"
+        )));
+    }
+
+    let astar_res = astar(
         &graph.graph,
         start,
         |f| goal_fn_callable(graph.graph.node_weight(f).unwrap()),
-        |e| edge_cost_callable(e.weight()),
-        |estimate| {
-            estimate_cost_callable(graph.graph.node_weight(estimate).unwrap())
-        },
+        |e| edge_cost_callable.call(py, e.weight()),
+        |estimate| estimate_cost_callable.call(py, &graph.graph[estimate]),
     )?;
     let path = match astar_res {
         Some(path) => path,
-        None => {
-            return Err(NoPathFound::new_err(
-                "No path found that satisfies goal_fn",
-            ))
-        }
+        None => return Err(NoPathFound::new_err("No path found that satisfies goal_fn")),
     };
     Ok(NodeIndices {
         nodes: path.1.into_iter().map(|x| x.index()).collect(),
@@ -543,9 +737,11 @@ fn digraph_astar_shortest_path(
 /// :returns: The computed shortest path between node and finish as a list
 ///     of node indices.
 /// :rtype: NodeIndices
+/// :raises ValueError: when an edge weight with NaN or negative value
+///     is provided.
 #[pyfunction]
-#[pyo3(text_signature = "(graph, node, goal_fn, edge_cost, estimate_cost, /)")]
-fn graph_astar_shortest_path(
+#[pyo3(text_signature = "(graph, node, goal_fn, edge_cost_fn, estimate_cost_fn, /)")]
+pub fn graph_astar_shortest_path(
     py: Python,
     graph: &graph::PyGraph,
     node: usize,
@@ -555,42 +751,30 @@ fn graph_astar_shortest_path(
 ) -> PyResult<NodeIndices> {
     let goal_fn_callable = |a: &PyObject| -> PyResult<bool> {
         let res = goal_fn.call1(py, (a,))?;
-        let raw = res.to_object(py);
-        let output: bool = raw.extract(py)?;
+        let output: bool = res.extract(py)?;
         Ok(output)
     };
 
-    let edge_cost_callable = |a: &PyObject| -> PyResult<f64> {
-        let res = edge_cost_fn.call1(py, (a,))?;
-        let raw = res.to_object(py);
-        let output: f64 = raw.extract(py)?;
-        Ok(output)
-    };
-
-    let estimate_cost_callable = |a: &PyObject| -> PyResult<f64> {
-        let res = estimate_cost_fn.call1(py, (a,))?;
-        let raw = res.to_object(py);
-        let output: f64 = raw.extract(py)?;
-        Ok(output)
-    };
+    let edge_cost_callable = CostFn::from(edge_cost_fn);
+    let estimate_cost_callable = CostFn::from(estimate_cost_fn);
     let start = NodeIndex::new(node);
 
-    let astar_res = astar::astar(
+    if !graph.graph.contains_node(start) {
+        return Err(PyIndexError::new_err(format!(
+            "Node source index \"{node}\" out of graph bound"
+        )));
+    }
+
+    let astar_res = astar(
         &graph.graph,
         start,
         |f| goal_fn_callable(graph.graph.node_weight(f).unwrap()),
-        |e| edge_cost_callable(e.weight()),
-        |estimate| {
-            estimate_cost_callable(graph.graph.node_weight(estimate).unwrap())
-        },
+        |e| edge_cost_callable.call(py, e.weight()),
+        |estimate| estimate_cost_callable.call(py, &graph.graph[estimate]),
     )?;
     let path = match astar_res {
         Some(path) => path,
-        None => {
-            return Err(NoPathFound::new_err(
-                "No path found that satisfies goal_fn",
-            ))
-        }
+        None => return Err(NoPathFound::new_err("No path found that satisfies goal_fn")),
     };
     Ok(NodeIndices {
         nodes: path.1.into_iter().map(|x| x.index()).collect(),
@@ -615,9 +799,11 @@ fn graph_astar_shortest_path(
 /// :returns: A dict of lengths where the key is the destination node index and
 ///     the value is the length of the path.
 /// :rtype: PathLengthMapping
+/// :raises ValueError: when an edge weight with NaN or negative value
+///     is provided.
 #[pyfunction]
 #[pyo3(text_signature = "(graph, start, k, edge_cost, /, goal=None)")]
-fn digraph_k_shortest_path_lengths(
+pub fn digraph_k_shortest_path_lengths(
     py: Python,
     graph: &digraph::PyDiGraph,
     start: usize,
@@ -626,29 +812,31 @@ fn digraph_k_shortest_path_lengths(
     goal: Option<usize>,
 ) -> PyResult<PathLengthMapping> {
     let out_goal = goal.map(NodeIndex::new);
-    let edge_cost_callable = |edge: &PyObject| -> PyResult<f64> {
-        let res = edge_cost.call1(py, (edge,))?;
-        res.extract(py)
-    };
+    let edge_cost_callable = CostFn::from(edge_cost);
 
-    let out_map = k_shortest_path::k_shortest_path(
-        &graph.graph,
-        NodeIndex::new(start),
-        out_goal,
-        k,
-        edge_cost_callable,
-    )?;
+    let out_map: Vec<Option<f64>> =
+        k_shortest_path(&graph.graph, NodeIndex::new(start), out_goal, k, |e| {
+            edge_cost_callable.call(py, e.weight())
+        })?;
+
+    if let Some(goal_usize) = goal {
+        return Ok(PathLengthMapping {
+            path_lengths: match out_map[goal_usize] {
+                Some(goal_length) => {
+                    let mut ans = DictMap::new();
+                    ans.insert(goal_usize, goal_length);
+                    ans
+                }
+                None => DictMap::new(),
+            },
+        });
+    }
+
     Ok(PathLengthMapping {
         path_lengths: out_map
-            .iter()
-            .filter_map(|(k, v)| {
-                let k_int = k.index();
-                if goal.is_some() && goal.unwrap() != k_int {
-                    None
-                } else {
-                    Some((k_int, *v))
-                }
-            })
+            .into_iter()
+            .enumerate()
+            .filter_map(|(k_int, opt_v)| opt_v.map(|v| (k_int, v)))
             .collect(),
     })
 }
@@ -671,6 +859,8 @@ fn digraph_k_shortest_path_lengths(
 /// :returns: A dict of lengths where the key is the destination node index and
 ///     the value is the length of the path.
 /// :rtype: PathLengthMapping
+/// :raises ValueError: when an edge weight with NaN or negative value
+///     is provided.
 #[pyfunction]
 #[pyo3(text_signature = "(graph, start, k, edge_cost, /, goal=None)")]
 pub fn graph_k_shortest_path_lengths(
@@ -682,29 +872,31 @@ pub fn graph_k_shortest_path_lengths(
     goal: Option<usize>,
 ) -> PyResult<PathLengthMapping> {
     let out_goal = goal.map(NodeIndex::new);
-    let edge_cost_callable = |edge: &PyObject| -> PyResult<f64> {
-        let res = edge_cost.call1(py, (edge,))?;
-        res.extract(py)
-    };
+    let edge_cost_callable = CostFn::from(edge_cost);
 
-    let out_map = k_shortest_path::k_shortest_path(
-        &graph.graph,
-        NodeIndex::new(start),
-        out_goal,
-        k,
-        edge_cost_callable,
-    )?;
+    let out_map: Vec<Option<f64>> =
+        k_shortest_path(&graph.graph, NodeIndex::new(start), out_goal, k, |e| {
+            edge_cost_callable.call(py, e.weight())
+        })?;
+
+    if let Some(goal_usize) = goal {
+        return Ok(PathLengthMapping {
+            path_lengths: match out_map[goal_usize] {
+                Some(goal_length) => {
+                    let mut ans = DictMap::new();
+                    ans.insert(goal_usize, goal_length);
+                    ans
+                }
+                None => DictMap::new(),
+            },
+        });
+    }
+
     Ok(PathLengthMapping {
         path_lengths: out_map
-            .iter()
-            .filter_map(|(k, v)| {
-                let k_int = k.index();
-                if goal.is_some() && goal.unwrap() != k_int {
-                    None
-                } else {
-                    Some((k_int, *v))
-                }
-            })
+            .into_iter()
+            .enumerate()
+            .filter_map(|(k_int, opt_v)| opt_v.map(|v| (k_int, v)))
             .collect(),
     })
 }
@@ -724,7 +916,7 @@ pub fn graph_k_shortest_path_lengths(
 /// :param PyDiGraph graph: The directed graph to run Floyd's algorithm on
 /// :param weight_fn: A callable object (function, lambda, etc) which
 ///     will be passed the edge object and expected to return a ``float``. This
-///     tells retworkx/rust how to extract a numerical weight as a ``float``
+///     tells rustworkx/rust how to extract a numerical weight as a ``float``
 ///     for edge object. Some simple examples are::
 ///
 ///         digraph_floyd_warshall(graph, weight_fn= lambda x: 1)
@@ -751,15 +943,12 @@ pub fn graph_k_shortest_path_lengths(
 ///         }
 ///
 /// :rtype: AllPairsPathLengthMapping
-#[pyfunction(
-    parallel_threshold = "300",
-    as_undirected = "false",
-    default_weight = "1.0"
-)]
+#[pyfunction]
 #[pyo3(
+    signature=(graph, weight_fn=None, as_undirected=false, default_weight=1.0, parallel_threshold=300),
     text_signature = "(graph, /, weight_fn=None, as_undirected=False, default_weight=1.0, parallel_threshold=300)"
 )]
-fn digraph_floyd_warshall(
+pub fn digraph_floyd_warshall(
     py: Python,
     graph: &digraph::PyDiGraph,
     weight_fn: Option<PyObject>,
@@ -792,7 +981,7 @@ fn digraph_floyd_warshall(
 /// :param PyGraph graph: The graph to run Floyd's algorithm on
 /// :param weight_fn: A callable object (function, lambda, etc) which
 ///     will be passed the edge object and expected to return a ``float``. This
-///     tells retworkx/rust how to extract a numerical weight as a ``float``
+///     tells rustworkx/rust how to extract a numerical weight as a ``float``
 ///     for edge object. Some simple examples are::
 ///
 ///         graph_floyd_warshall(graph, weight_fn= lambda x: 1)
@@ -817,8 +1006,9 @@ fn digraph_floyd_warshall(
 ///         }
 ///
 /// :rtype: AllPairsPathLengthMapping
-#[pyfunction(parallel_threshold = "300", default_weight = "1.0")]
+#[pyfunction]
 #[pyo3(
+    signature=(graph, weight_fn=None, default_weight=1.0, parallel_threshold=300),
     text_signature = "(graph, /, weight_fn=None, default_weight=1.0, parallel_threshold=300)"
 )]
 pub fn graph_floyd_warshall(
@@ -854,7 +1044,7 @@ pub fn graph_floyd_warshall(
 /// :param PyGraph graph: The graph to run Floyd's algorithm on
 /// :param weight_fn: A callable object (function, lambda, etc) which
 ///     will be passed the edge object and expected to return a ``float``. This
-///     tells retworkx/rust how to extract a numerical weight as a ``float``
+///     tells rustworkx/rust how to extract a numerical weight as a ``float``
 ///     for edge object. Some simple examples are::
 ///
 ///         graph_floyd_warshall_numpy(graph, weight_fn: lambda x: 1)
@@ -872,8 +1062,9 @@ pub fn graph_floyd_warshall(
 ///     path between two nodes then the corresponding matrix entry will be
 ///     ``np.inf``.
 /// :rtype: numpy.ndarray
-#[pyfunction(parallel_threshold = "300", default_weight = "1.0")]
+#[pyfunction]
 #[pyo3(
+    signature=(graph, weight_fn=None, default_weight=1.0, parallel_threshold=300),
     text_signature = "(graph, /, weight_fn=None, default_weight=1.0, parallel_threshold=300)"
 )]
 pub fn graph_floyd_warshall_numpy(
@@ -883,15 +1074,92 @@ pub fn graph_floyd_warshall_numpy(
     default_weight: f64,
     parallel_threshold: usize,
 ) -> PyResult<PyObject> {
-    let matrix = floyd_warshall::floyd_warshall_numpy(
+    let (matrix, _) = floyd_warshall::floyd_warshall_numpy(
         py,
         &graph.graph,
         weight_fn,
         true,
         default_weight,
+        false,
         parallel_threshold,
     )?;
-    Ok(matrix.into_pyarray(py).into())
+    Ok(matrix.into_pyarray_bound(py).into())
+}
+
+/// Find all-pairs shortest path lengths using Floyd's algorithm
+///
+/// Floyd's algorithm is used for finding shortest paths in dense graphs
+/// or graphs with negative weights (where Dijkstra's algorithm fails).
+///
+/// This function is multithreaded and will launch a pool with threads equal
+/// to the number of CPUs by default if the number of nodes in the graph is
+/// above the value of ``parallel_threshold`` (it defaults to 300).
+/// You can tune the number of threads with the ``RAYON_NUM_THREADS``
+/// environment variable. For example, setting ``RAYON_NUM_THREADS=4`` would
+/// limit the thread pool to 4 threads if parallelization was enabled.
+///
+/// :param PyGraph graph: The graph to run Floyd's algorithm on
+/// :param weight_fn: A callable object (function, lambda, etc) which
+///     will be passed the edge object and expected to return a ``float``. This
+///     tells rustworkx/rust how to extract a numerical weight as a ``float``
+///     for edge object. Some simple examples are::
+///
+///         graph_floyd_warshall_numpy(graph, weight_fn: lambda x: 1)
+///
+///     to return a weight of 1 for all edges. Also::
+///
+///         graph_floyd_warshall_numpy(graph, weight_fn: lambda x: float(x))
+///
+///     to cast the edge object as a float as the weight.
+/// :param int parallel_threshold: The number of nodes to execute
+///     the algorithm in parallel at. It defaults to 300, but this can
+///     be tuned
+///
+/// :returns: A tuple of two matrices.
+///     First one is a matrix of shortest path distances between nodes. If there is no
+///     path between two nodes then the corresponding matrix entry will be
+///     ``np.inf``.
+///     Second one is a matrix of **next** nodes for given source and target. If there is no
+///     path between two nodes then the corresponding matrix entry will be the same as
+///     a target node. To reconstruct the shortest path among nodes::
+///
+///         def reconstruct_path(source, target, successors):
+///             path = []
+///             if source == target:
+///                 return path
+///             curr = source
+///             while curr != target:
+///                 path.append(curr)
+///                 curr = successors[curr, target]
+///             path.append(target)
+///             return path
+///
+/// :rtype: (numpy.ndarray, numpy.ndarray)
+#[pyfunction]
+#[pyo3(
+signature=(graph, weight_fn=None, default_weight=1.0, parallel_threshold=300),
+text_signature = "(graph, /, weight_fn=None, default_weight=1.0, parallel_threshold=300)"
+)]
+pub fn graph_floyd_warshall_successor_and_distance(
+    py: Python,
+    graph: &graph::PyGraph,
+    weight_fn: Option<PyObject>,
+    default_weight: f64,
+    parallel_threshold: usize,
+) -> PyResult<(PyObject, PyObject)> {
+    let (matrix, next) = floyd_warshall::floyd_warshall_numpy(
+        py,
+        &graph.graph,
+        weight_fn,
+        true,
+        default_weight,
+        true,
+        parallel_threshold,
+    )?;
+    Ok((
+        matrix.into_pyarray_bound(py).into(),
+        next.unwrap().into_pyarray_bound(py).into(),
+    ))
 }
 
 /// Find all-pairs shortest path lengths using Floyd's algorithm
@@ -909,7 +1177,7 @@ pub fn graph_floyd_warshall_numpy(
 /// :param PyDiGraph graph: The directed graph to run Floyd's algorithm on
 /// :param weight_fn: A callable object (function, lambda, etc) which
 ///     will be passed the edge object and expected to return a ``float``. This
-///     tells retworkx/rust how to extract a numerical weight as a ``float``
+///     tells rustworkx/rust how to extract a numerical weight as a ``float``
 ///     for edge object. Some simple examples are::
 ///
 ///         graph_floyd_warshall_numpy(graph, weight_fn: lambda x: 1)
@@ -929,13 +1197,10 @@ pub fn graph_floyd_warshall_numpy(
 ///     path between two nodes then the corresponding matrix entry will be
 ///     ``np.inf``.
 /// :rtype: numpy.ndarray
-#[pyfunction(
-    parallel_threshold = "300",
-    as_undirected = "false",
-    default_weight = "1.0"
-)]
+#[pyfunction]
 #[pyo3(
-    text_signature = "(graph, /, weight_fn=None, as_undirected=False, default_weight=1.0, parallel_threshold=300)"
+signature=(graph, weight_fn=None, as_undirected=false, default_weight=1.0, parallel_threshold=300),
+text_signature = "(graph, /, weight_fn=None, as_undirected=False, default_weight=1.0, parallel_threshold=300)"
 )]
 pub fn digraph_floyd_warshall_numpy(
     py: Python,
@@ -945,15 +1210,95 @@ pub fn digraph_floyd_warshall_numpy(
     default_weight: f64,
     parallel_threshold: usize,
 ) -> PyResult<PyObject> {
-    let matrix = floyd_warshall::floyd_warshall_numpy(
+    let (matrix, _) = floyd_warshall::floyd_warshall_numpy(
         py,
         &graph.graph,
         weight_fn,
         as_undirected,
         default_weight,
+        false,
         parallel_threshold,
     )?;
-    Ok(matrix.into_pyarray(py).into())
+    Ok(matrix.into_pyarray_bound(py).into())
+}
+
+/// Find all-pairs shortest path lengths using Floyd's algorithm
+///
+/// Floyd's algorithm is used for finding shortest paths in dense graphs
+/// or graphs with negative weights (where Dijkstra's algorithm fails).
+///
+/// This function is multithreaded and will launch a pool with threads equal
+/// to the number of CPUs by default if the number of nodes in the graph is
+/// above the value of ``parallel_threshold`` (it defaults to 300).
+/// You can tune the number of threads with the ``RAYON_NUM_THREADS``
+/// environment variable. For example, setting ``RAYON_NUM_THREADS=4`` would
+/// limit the thread pool to 4 threads if parallelization was enabled.
+///
+/// :param PyDiGraph graph: The directed graph to run Floyd's algorithm on
+/// :param weight_fn: A callable object (function, lambda, etc) which
+///     will be passed the edge object and expected to return a ``float``. This
+///     tells rustworkx/rust how to extract a numerical weight as a ``float``
+///     for edge object. Some simple examples are::
+///
+///         graph_floyd_warshall_numpy(graph, weight_fn: lambda x: 1)
+///
+///     to return a weight of 1 for all edges. Also::
+///
+///         graph_floyd_warshall_numpy(graph, weight_fn: lambda x: float(x))
+///
+///     to cast the edge object as a float as the weight.
+/// :param as_undirected: If set to true each directed edge will be treated as
+///     bidirectional/undirected.
+/// :param int parallel_threshold: The number of nodes to execute
+///     the algorithm in parallel at. It defaults to 300, but this can
+///     be tuned
+///
+/// :returns: A tuple of two matrices.
+///     First one is a matrix of shortest path distances between nodes. If there is no
+///     path between two nodes then the corresponding matrix entry will be
+///     ``np.inf``.
+///     Second one is a matrix of **next** nodes for given source and target. If there is no
+///     path between two nodes then the corresponding matrix entry will be the same as
+///     a target node. To reconstruct the shortest path among nodes::
+///
+///         def reconstruct_path(source, target, successors):
+///             path = []
+///             if source == target:
+///                 return path
+///             curr = source
+///             while curr != target:
+///                 path.append(curr)
+///                 curr = successors[curr, target]
+///             path.append(target)
+///             return path
+///
+/// :rtype: (numpy.ndarray, numpy.ndarray)
+#[pyfunction]
+#[pyo3(
+signature=(graph, weight_fn=None, as_undirected=false, default_weight=1.0, parallel_threshold=300),
+text_signature = "(graph, /, weight_fn=None, as_undirected=False, default_weight=1.0, parallel_threshold=300)"
+)]
+pub fn digraph_floyd_warshall_successor_and_distance(
+    py: Python,
+    graph: &digraph::PyDiGraph,
+    weight_fn: Option<PyObject>,
+    as_undirected: bool,
+    default_weight: f64,
+    parallel_threshold: usize,
+) -> PyResult<(PyObject, PyObject)> {
+    let (matrix, next) = floyd_warshall::floyd_warshall_numpy(
+        py,
+        &graph.graph,
+        weight_fn,
+        as_undirected,
+        default_weight,
+        true,
+        parallel_threshold,
+    )?;
+    Ok((
+        matrix.into_pyarray_bound(py).into(),
+        next.unwrap().into_pyarray_bound(py).into(),
+    ))
 }
 
 /// Get the number of unweighted shortest paths from a source node
@@ -972,10 +1317,7 @@ pub fn digraph_num_shortest_paths_unweighted(
     source: usize,
 ) -> PyResult<NodesCountMapping> {
     Ok(NodesCountMapping {
-        map: num_shortest_path::num_shortest_paths_unweighted(
-            &graph.graph,
-            source,
-        )?,
+        map: num_shortest_path::num_shortest_paths_unweighted(&graph.graph, source)?,
     })
 }
 
@@ -995,10 +1337,7 @@ pub fn graph_num_shortest_paths_unweighted(
     source: usize,
 ) -> PyResult<NodesCountMapping> {
     Ok(NodesCountMapping {
-        map: num_shortest_path::num_shortest_paths_unweighted(
-            &graph.graph,
-            source,
-        )?,
+        map: num_shortest_path::num_shortest_paths_unweighted(&graph.graph, source)?,
     })
 }
 
@@ -1026,12 +1365,9 @@ pub fn graph_num_shortest_paths_unweighted(
 ///
 /// :returns: The distance matrix
 /// :rtype: numpy.ndarray
-#[pyfunction(
-    parallel_threshold = "300",
-    as_undirected = "false",
-    null_value = "0.0"
-)]
+#[pyfunction]
 #[pyo3(
+    signature=(graph, parallel_threshold=300, as_undirected=false, null_value=0.0),
     text_signature = "(graph, /, parallel_threshold=300, as_undirected=False, null_value=0.0)"
 )]
 pub fn digraph_distance_matrix(
@@ -1047,7 +1383,7 @@ pub fn digraph_distance_matrix(
         as_undirected,
         null_value,
     );
-    matrix.into_pyarray(py).into()
+    matrix.into_pyarray_bound(py).into()
 }
 
 /// Get the distance matrix for an undirected graph
@@ -1057,7 +1393,7 @@ pub fn digraph_distance_matrix(
 /// distance of 1.
 ///
 /// This function is also multithreaded and will run in parallel if the number
-/// of nodes in the graph is above the value of ``paralllel_threshold`` (it
+/// of nodes in the graph is above the value of ``parallel_threshold`` (it
 /// defaults to 300). If the function will be running in parallel the env var
 /// ``RAYON_NUM_THREADS`` can be used to adjust how many threads will be used.
 ///
@@ -1071,8 +1407,11 @@ pub fn digraph_distance_matrix(
 ///
 /// :returns: The distance matrix
 /// :rtype: numpy.ndarray
-#[pyfunction(parallel_threshold = "300", null_value = "0.0")]
-#[pyo3(text_signature = "(graph, /, parallel_threshold=300, null_value=0.0)")]
+#[pyfunction]
+#[pyo3(
+    signature=(graph, parallel_threshold=300, null_value=0.0),
+    text_signature = "(graph, /, parallel_threshold=300, null_value=0.0)"
+)]
 pub fn graph_distance_matrix(
     py: Python,
     graph: &graph::PyGraph,
@@ -1085,22 +1424,22 @@ pub fn graph_distance_matrix(
         true,
         null_value,
     );
-    matrix.into_pyarray(py).into()
+    matrix.into_pyarray_bound(py).into()
 }
 
-/// Return the average shortest path length for a :class:`~retworkx.PyDiGraph`
+/// Return the average shortest path length for a :class:`~rustworkx.PyDiGraph`
 /// with unweighted edges.
 ///
 /// The average shortest path length is calculated as
 ///
 /// .. math::
 ///
-///     a =\sum_{s,t \in V} \frac{d(s, t)}{n(n-1)}
+///     a =\sum_{s,t \in V, s \ne t} \frac{d(s, t)}{n(n-1)}
 ///
 /// where :math:`V` is the set of nodes in ``graph``, :math:`d(s, t)` is the
 /// shortest path length from :math:`s` to :math:`t`, and :math:`n` is the
-/// number of nodes in ``graph``. This also assumes that
-/// :math:`d(s, t) = 0` if :math:`t` cannot be reached from :math:`s`.
+/// number of nodes in ``graph``. If ``disconnected`` is set to ``True``,
+/// the average will be taken only between connected nodes.
 ///
 /// This function is also multithreaded and will run in parallel if the number
 /// of nodes in the graph is above the value of ``parallel_threshold`` (it
@@ -1117,47 +1456,57 @@ pub fn graph_distance_matrix(
 /// :param bool as_undirected: If set to ``True`` the input directed graph
 ///     will be treated as if each edge was bidirectional/undirected while
 ///     finding the shortest paths. Default: ``False``.
+/// :param bool disconnected: If set to ``True`` only connected vertex pairs
+///     will be included in the calculation. If ``False``, infinity is returned
+///     for disconnected graphs. Default: ``False``.
 ///
-/// :returns: The average shortest path length. If the graph is empty this
-///     will return NaN and if there is a single node 0 will be returned.
+/// :returns: The average shortest path length. If no vertex pairs can be included
+///     in the calculation this will return NaN.
 /// :rtype: float
-#[pyfunction(parallel_threshold = "300", as_undirected = "false")]
+#[pyfunction]
 #[pyo3(
-    text_signature = "(graph, /, parallel_threshold=300, as_undirected=False)"
+    signature=(graph, parallel_threshold=300, as_undirected=false, disconnected=false),
+    text_signature = "(graph, /, parallel_threshold=300, as_undirected=False, disconnected=False)"
 )]
 pub fn digraph_unweighted_average_shortest_path_length(
     graph: &digraph::PyDiGraph,
     parallel_threshold: usize,
     as_undirected: bool,
+    disconnected: bool,
 ) -> f64 {
     let n = graph.node_count();
-    if n == 0 {
-        return std::f64::NAN;
+    if n <= 1 {
+        return f64::NAN;
     }
-    if n == 1 {
-        return 0.0;
+
+    let (sum, conn_pairs) =
+        average_length::compute_distance_sum(&graph.graph, parallel_threshold, as_undirected);
+
+    let tot_pairs = n * (n - 1);
+    if disconnected && conn_pairs == 0 {
+        return f64::NAN;
     }
-    let sum = average_length::compute_distance_sum(
-        &graph.graph,
-        parallel_threshold,
-        as_undirected,
-    ) as f64;
-    sum / (n * (n - 1)) as f64
+
+    if !disconnected && conn_pairs < tot_pairs {
+        return f64::INFINITY;
+    }
+
+    (sum as f64) / (conn_pairs as f64)
 }
 
-/// Return the average shortest path length for a :class:`~retworkx.PyGraph`
+/// Return the average shortest path length for a :class:`~rustworkx.PyGraph`
 /// with unweighted edges.
 ///
 /// The average shortest path length is calculated as
 ///
 /// .. math::
 ///
-///     a =\sum_{s,t \in V} \frac{d(s, t)}{n(n-1)}
+///     a =\sum_{s,t \in V, s \ne t} \frac{d(s, t)}{n(n-1)}
 ///
 /// where :math:`V` is the set of nodes in ``graph``, :math:`d(s, t)` is the
 /// shortest path length from node :math:`s` to node :math:`t`, and :math:`n`
-/// is the number of nodes in ``graph``. This also assumes that
-/// :math:`d(s, t) = 0` if :math:`t` cannot be reached from :math:`s`.
+/// is the number of nodes in ``graph``. If ``disconnected`` is set to ``True``,
+/// the average will be taken only between connected nodes.
 ///
 /// This function is also multithreaded and will run in parallel if the number
 /// of nodes in the graph is above the value of ``parallel_threshold`` (it
@@ -1171,27 +1520,611 @@ pub fn digraph_unweighted_average_shortest_path_length(
 /// :param int parallel_threshold: The number of nodes to calculate the
 ///     the distance matrix in parallel at. It defaults to 300, but this can
 ///     be tuned to any number of nodes.
+/// :param bool disconnected: If set to ``True`` only connected vertex pairs
+///     will be included in the calculation. If ``False``, infinity is returned
+///     for disconnected graphs. Default: ``False``.
 ///
-/// :returns: The average shortest path length. If the graph is empty this
-///     will return NaN and if there is a single node 0 will be returned.
+/// :returns: The average shortest path length. If no vertex pairs can be included
+///     in the calculation this will return NaN.
 /// :rtype: float
-#[pyfunction(parallel_threshold = "300")]
-#[pyo3(text_signature = "(graph, /, parallel_threshold=300)")]
+#[pyfunction]
+#[pyo3(
+    signature=(graph, parallel_threshold=300, disconnected=false),
+    text_signature = "(graph, /, parallel_threshold=300, disconnected=False)"
+)]
 pub fn graph_unweighted_average_shortest_path_length(
     graph: &graph::PyGraph,
     parallel_threshold: usize,
+    disconnected: bool,
 ) -> f64 {
     let n = graph.node_count();
-    if n == 0 {
-        return std::f64::NAN;
+    if n <= 1 {
+        return f64::NAN;
     }
-    if n == 1 {
-        return 0.0;
+
+    let (sum, conn_pairs) =
+        average_length::compute_distance_sum(&graph.graph, parallel_threshold, true);
+
+    let tot_pairs = n * (n - 1);
+    if disconnected && conn_pairs == 0 {
+        return f64::NAN;
     }
-    let sum = average_length::compute_distance_sum(
-        &graph.graph,
-        parallel_threshold,
-        true,
-    ) as f64;
-    sum / (n * (n - 1)) as f64
+
+    if !disconnected && conn_pairs < tot_pairs {
+        return f64::INFINITY;
+    }
+
+    (sum as f64) / (conn_pairs as f64)
+}
+
+/// Compute the lengths of the shortest paths for a PyDiGraph object using
+/// the Bellman-Ford algorithm with the SPFA heuristic.
+///
+/// :param PyDiGraph graph: The input graph to use
+/// :param int node: The node index to use as the source for finding the
+///     shortest paths from
+/// :param edge_cost_fn: A python callable that will take in 1 parameter, an
+///     edge's data object and will return a float that represents the
+///     cost/weight of that edge. It can be negative.
+/// :param int goal: An optional node index to use as the end of the path.
+///     When specified the output dictionary will only have a single entry with
+///     the length of the shortest path to the goal node.
+///
+/// :returns: A read-only dictionary of the shortest paths from the provided node where
+///     the key is the node index of the end of the path and the value is the
+///     cost/sum of the weights of path
+/// :rtype: PathLengthMapping
+///
+/// :raises: :class:`~rustworkx.NegativeCycle`: when there is a negative cycle and the shortest
+///     path is not defined.
+#[pyfunction]
+#[pyo3(text_signature = "(graph, node, edge_cost_fn, /, goal=None)")]
+pub fn digraph_bellman_ford_shortest_path_lengths(
+    py: Python,
+    graph: &digraph::PyDiGraph,
+    node: usize,
+    edge_cost_fn: PyObject,
+    goal: Option<usize>,
+) -> PyResult<PathLengthMapping> {
+    let edge_weights: Vec<Option<f64>> =
+        edge_weights_from_callable(py, &graph.graph, &Some(edge_cost_fn), 1.0)?;
+    let edge_cost = |e: EdgeIndex| -> PyResult<f64> {
+        match edge_weights[e.index()] {
+            Some(weight) => Ok(weight),
+            None => Err(PyIndexError::new_err("No edge found for index")),
+        }
+    };
+
+    let start = NodeIndex::new(node);
+
+    if !graph.graph.contains_node(start) {
+        return Err(PyIndexError::new_err(format!(
+            "Node source index \"{node}\" out of graph bound"
+        )));
+    }
+
+    let res: Option<Vec<Option<f64>>> =
+        bellman_ford(&graph.graph, start, |e| edge_cost(e.id()), None)?;
+
+    if res.is_none() {
+        return Err(NegativeCycle::new_err(
+            "The shortest-path is not defined because there is a negative cycle",
+        ));
+    }
+
+    let res = res.unwrap();
+
+    if let Some(goal_usize) = goal {
+        return Ok(PathLengthMapping {
+            path_lengths: match res[goal_usize] {
+                Some(goal_length) => {
+                    let mut ans = DictMap::new();
+                    ans.insert(goal_usize, goal_length);
+                    ans
+                }
+                None => DictMap::new(),
+            },
+        });
+    }
+
+    Ok(PathLengthMapping {
+        path_lengths: res
+            .into_iter()
+            .enumerate()
+            .filter_map(|(k_int, opt_v)| {
+                if k_int != node {
+                    opt_v.map(|v| (k_int, v))
+                } else {
+                    None
+                }
+            })
+            .collect(),
+    })
+}
+
+/// Compute the lengths of the shortest paths for a PyGraph object using
+/// the Bellman-Ford algorithm with the SPFA heuristic.
+///
+/// :param PyGraph graph: The input graph to use
+/// :param int node: The node index to use as the source for finding the
+///     shortest paths from
+/// :param edge_cost_fn: A python callable that will take in 1 parameter, an
+///     edge's data object and will return a float that represents the
+///     cost/weight of that edge. It can be negative.
+/// :param int goal: An optional node index to use as the end of the path.
+///     When specified the output dictionary will only have a single entry with
+///     the length of the shortest path to the goal node.
+///
+/// :returns: A read-only dictionary of the shortest paths from the provided node where
+///     the key is the node index of the end of the path and the value is the
+///     cost/sum of the weights of path
+/// :rtype: PathLengthMapping
+///
+/// :raises: :class:`~rustworkx.NegativeCycle`: when there is a negative cycle and the shortest
+///     path is not defined.
+#[pyfunction]
+#[pyo3(text_signature = "(graph, node, edge_cost_fn, /, goal=None)")]
+pub fn graph_bellman_ford_shortest_path_lengths(
+    py: Python,
+    graph: &graph::PyGraph,
+    node: usize,
+    edge_cost_fn: PyObject,
+    goal: Option<usize>,
+) -> PyResult<PathLengthMapping> {
+    let edge_weights: Vec<Option<f64>> =
+        edge_weights_from_callable(py, &graph.graph, &Some(edge_cost_fn), 1.0)?;
+    let edge_cost = |e: EdgeIndex| -> PyResult<f64> {
+        match edge_weights[e.index()] {
+            Some(weight) => Ok(weight),
+            None => Err(PyIndexError::new_err("No edge found for index")),
+        }
+    };
+
+    let start = NodeIndex::new(node);
+
+    if !graph.graph.contains_node(start) {
+        return Err(PyIndexError::new_err(format!(
+            "Node source index \"{node}\" out of graph bound"
+        )));
+    }
+
+    let res: Option<Vec<Option<f64>>> =
+        bellman_ford(&graph.graph, start, |e| edge_cost(e.id()), None)?;
+
+    if res.is_none() {
+        return Err(NegativeCycle::new_err(
+            "The shortest-path is not defined because there is a negative cycle",
+        ));
+    }
+
+    let res = res.unwrap();
+
+    if let Some(goal_usize) = goal {
+        return Ok(PathLengthMapping {
+            path_lengths: match res[goal_usize] {
+                Some(goal_length) => {
+                    let mut ans = DictMap::new();
+                    ans.insert(goal_usize, goal_length);
+                    ans
+                }
+                None => DictMap::new(),
+            },
+        });
+    }
+
+    Ok(PathLengthMapping {
+        path_lengths: res
+            .into_iter()
+            .enumerate()
+            .filter_map(|(k_int, opt_v)| {
+                if k_int != node {
+                    opt_v.map(|v| (k_int, v))
+                } else {
+                    None
+                }
+            })
+            .collect(),
+    })
+}
+
+/// Find the shortest path from a node
+///
+/// This function will generate the shortest path from a source node using
+/// the Bellman-Ford algorithm with the SPFA heuristic.
+///
+/// :param PyGraph graph: The input graph to use
+/// :param int source: The node index to find paths from
+/// :param int target: An optional target to find a path to
+/// :param weight_fn: An optional weight function for an edge. It will accept
+///     a single argument, the edge's weight object and will return a float which
+///     will be used to represent the weight/cost of the edge
+/// :param float default_weight: If ``weight_fn`` isn't specified this optional
+///     float value will be used for the weight/cost of each edge.
+/// :param bool as_undirected: If set to true the graph will be treated as
+///     undirected for finding the shortest path.
+///
+/// :return: Read-only dictionary of paths. The keys are destination node indices and
+///     the dict values are lists of node indices making the path.
+/// :rtype: PathMapping
+///
+/// :raises: :class:`~rustworkx.NegativeCycle`: when there is a negative cycle and the shortest
+///     path is not defined.
+#[pyfunction]
+#[pyo3(
+    signature=(graph, source, target=None, weight_fn=None, default_weight=1.0),
+    text_signature = "(graph, source, /, target=None, weight_fn=None, default_weight=1.0)"
+)]
+pub fn graph_bellman_ford_shortest_paths(
+    py: Python,
+    graph: &graph::PyGraph,
+    source: usize,
+    target: Option<usize>,
+    weight_fn: Option<PyObject>,
+    default_weight: f64,
+) -> PyResult<PathMapping> {
+    let start = NodeIndex::new(source);
+
+    if !graph.graph.contains_node(start) {
+        return Err(PyIndexError::new_err(format!(
+            "Node source index \"{source}\" out of graph bound"
+        )));
+    }
+
+    let mut paths: DictMap<NodeIndex, Vec<NodeIndex>> = DictMap::with_capacity(graph.node_count());
+
+    let edge_weights: Vec<Option<f64>> =
+        edge_weights_from_callable(py, &graph.graph, &weight_fn, default_weight)?;
+    let edge_cost = |e: EdgeIndex| -> PyResult<f64> {
+        match edge_weights[e.index()] {
+            Some(weight) => Ok(weight),
+            None => Err(PyIndexError::new_err("No edge found for index")),
+        }
+    };
+
+    let res: Option<Vec<Option<f64>>> =
+        bellman_ford(&graph.graph, start, |e| edge_cost(e.id()), Some(&mut paths))?;
+
+    if res.is_none() {
+        return Err(NegativeCycle::new_err(
+            "The shortest-path is not defined because there is a negative cycle",
+        ));
+    }
+
+    Ok(PathMapping {
+        paths: paths
+            .iter()
+            .filter_map(|(k, v)| {
+                let k_int = k.index();
+                if k_int == source || target.is_some() && target.unwrap() != k_int {
+                    None
+                } else {
+                    Some((
+                        k.index(),
+                        v.iter().map(|x| x.index()).collect::<Vec<usize>>(),
+                    ))
+                }
+            })
+            .collect(),
+    })
+}
+
+/// Find the shortest path from a node
+///
+/// This function will generate the shortest path from a source node using
+/// the Bellman-Ford algorithm with the SPFA heuristic.
+///
+/// :param PyDiGraph graph: The input graph to use
+/// :param int source: The node index to find paths from
+/// :param int target: An optional target to find a path to
+/// :param weight_fn: An optional weight function for an edge. It will accept
+///     a single argument, the edge's weight object and will return a float which
+///     will be used to represent the weight/cost of the edge
+/// :param float default_weight: If ``weight_fn`` isn't specified this optional
+///     float value will be used for the weight/cost of each edge.
+/// :param bool as_undirected: If set to true the graph will be treated as
+///     undirected for finding the shortest path.
+///
+/// :return: Read-only dictionary of paths. The keys are destination node indices and
+///     the dict values are lists of node indices making the path.
+/// :rtype: PathMapping
+///
+/// :raises: :class:`~rustworkx.NegativeCycle`: when there is a negative cycle and the shortest
+///     path is not defined.
+#[pyfunction]
+#[pyo3(
+    signature=(graph, source, target=None, weight_fn=None, default_weight=1.0, as_undirected=false),
+    text_signature = "(graph, source, /, target=None, weight_fn=None, default_weight=1.0, as_undirected=False)"
+)]
+pub fn digraph_bellman_ford_shortest_paths(
+    py: Python,
+    graph: &digraph::PyDiGraph,
+    source: usize,
+    target: Option<usize>,
+    weight_fn: Option<PyObject>,
+    default_weight: f64,
+    as_undirected: bool,
+) -> PyResult<PathMapping> {
+    if as_undirected {
+        return graph_bellman_ford_shortest_paths(
+            py,
+            &graph.to_undirected(py, true, None)?,
+            source,
+            target,
+            weight_fn.map(|x| x.clone_ref(py)),
+            default_weight,
+        );
+    }
+
+    let start = NodeIndex::new(source);
+
+    if !graph.graph.contains_node(start) {
+        return Err(PyIndexError::new_err(format!(
+            "Node source index \"{source}\" out of graph bound"
+        )));
+    }
+
+    let mut paths: DictMap<NodeIndex, Vec<NodeIndex>> = DictMap::with_capacity(graph.node_count());
+
+    let edge_weights: Vec<Option<f64>> =
+        edge_weights_from_callable(py, &graph.graph, &weight_fn, default_weight)?;
+    let edge_cost = |e: EdgeIndex| -> PyResult<f64> {
+        match edge_weights[e.index()] {
+            Some(weight) => Ok(weight),
+            None => Err(PyIndexError::new_err("No edge found for index")),
+        }
+    };
+
+    let res: Option<Vec<Option<f64>>> =
+        bellman_ford(&graph.graph, start, |e| edge_cost(e.id()), Some(&mut paths))?;
+
+    if res.is_none() {
+        return Err(NegativeCycle::new_err(
+            "The shortest-path is not defined because there is a negative cycle",
+        ));
+    }
+
+    Ok(PathMapping {
+        paths: paths
+            .iter()
+            .filter_map(|(k, v)| {
+                let k_int = k.index();
+                if k_int == source || target.is_some() && target.unwrap() != k_int {
+                    None
+                } else {
+                    Some((
+                        k.index(),
+                        v.iter().map(|x| x.index()).collect::<Vec<usize>>(),
+                    ))
+                }
+            })
+            .collect(),
+    })
+}
+
+/// Check if a negative cycle exists on a graph
+///
+/// This function will check for the existence of a negative cycle in a graph
+/// using the Bellman-Ford algorithm with the SPFA heuristic.
+///
+/// :param PyDiGraph graph: The input graph to use
+/// :param edge_cost_fn: A python callable that will take in 1 parameter, an edge's
+///     data object and will return a float that represents the cost of that
+///     edge.
+///
+/// :return: True if there is a negative cycle or False otherwise
+/// :rtype: bool
+#[pyfunction]
+#[pyo3(text_signature = "(graph, edge_cost_fn, /)")]
+pub fn negative_edge_cycle(
+    py: Python,
+    graph: &digraph::PyDiGraph,
+    edge_cost_fn: PyObject,
+) -> PyResult<bool> {
+    let edge_weights: Vec<Option<f64>> =
+        edge_weights_from_callable(py, &graph.graph, &Some(edge_cost_fn), 1.0)?;
+    let edge_cost = |e: EdgeIndex| -> PyResult<f64> {
+        match edge_weights[e.index()] {
+            Some(weight) => Ok(weight),
+            None => Err(PyIndexError::new_err("No edge found for index")),
+        }
+    };
+
+    let cycle: Option<Vec<_>> = negative_cycle_finder(&graph.graph, |e| edge_cost(e.id()))?;
+
+    Ok(cycle.is_some())
+}
+
+/// Find a negative cycle of a graph
+///
+/// This function will find an arbitrary negative cycle in a graph
+/// using the Bellman-Ford algorithm with the SPFA heuristic.
+///
+/// :param PyDiGraph graph: The input graph to use
+/// :param edge_cost_fn: A python callable that will take in 1 parameter, an edge's
+///     data object and will return a float that represents the cost of that
+///     edge.
+///
+/// :return: A list of the nodes in an arbitrary negative cycle, if it exists
+/// :rtype: NodeIndices
+///
+/// :raises: ValueError: when there is no cycle in the graph provided
+#[pyfunction]
+#[pyo3(text_signature = "(graph, edge_cost_fn, /)")]
+pub fn find_negative_cycle(
+    py: Python,
+    graph: &digraph::PyDiGraph,
+    edge_cost_fn: PyObject,
+) -> PyResult<NodeIndices> {
+    let edge_weights: Vec<Option<f64>> =
+        edge_weights_from_callable(py, &graph.graph, &Some(edge_cost_fn), 1.0)?;
+    let edge_cost = |e: EdgeIndex| -> PyResult<f64> {
+        match edge_weights[e.index()] {
+            Some(weight) => Ok(weight),
+            None => Err(PyIndexError::new_err("No edge found for index")),
+        }
+    };
+
+    let cycle: Option<Vec<_>> = negative_cycle_finder(&graph.graph, |e| edge_cost(e.id()))?;
+
+    if cycle.is_none() {
+        return Err(PyValueError::new_err("There is no negative cycle"));
+    }
+
+    let cycle = cycle.unwrap();
+
+    Ok(NodeIndices {
+        nodes: cycle.into_iter().map(|x| x.index()).collect(),
+    })
+}
+
+/// For each node in the graph, calculates the lengths of the shortest paths
+/// to all others in a :class:`~rustworkx.PyDiGraph` object
+///
+/// This function will calculate the shortest path lengths from all nodes in the
+/// graph using the Bellman-Ford algorithm. This function is multithreaded and will
+/// launch a thread pool with threads equal to the number of CPUs by
+/// default. You can tune the number of threads with the ``RAYON_NUM_THREADS``
+/// environment variable. For example, setting ``RAYON_NUM_THREADS=4`` would
+/// limit the thread pool to 4 threads.
+///
+/// :param graph: The input :class:`~rustworkx.PyDiGraph` to use
+/// :param edge_cost_fn: A callable object that acts as a weight function for
+///     an edge. It will accept a single positional argument, the edge's weight
+///     object and will return a float which will be used to represent the
+///     weight/cost of the edge
+///
+/// :return: A read-only dictionary of path lengths. The keys are source
+///     node indices and the values are dicts of the target node and the length
+///     of the shortest path to that node. For example::
+///
+///         {
+///             0: {1: 2.0, 2: 2.0},
+///             1: {2: 1.0},
+///             2: {0: 1.0},
+///         }
+///
+/// :rtype: AllPairsPathLengthMapping
+///
+/// :raises: :class:`~rustworkx.NegativeCycle`: when there is a negative cycle and the shortest
+///     path is not defined.
+#[pyfunction]
+#[pyo3(text_signature = "(graph, edge_cost_fn, /)")]
+pub fn digraph_all_pairs_bellman_ford_path_lengths(
+    py: Python,
+    graph: &digraph::PyDiGraph,
+    edge_cost_fn: PyObject,
+) -> PyResult<AllPairsPathLengthMapping> {
+    all_pairs_bellman_ford::all_pairs_bellman_ford_path_lengths(py, &graph.graph, edge_cost_fn)
+}
+
+/// For each node in the graph, finds the shortest paths to all others in a
+/// :class:`~rustworkx.PyDiGraph` object
+///
+/// This function will generate the shortest paths from all nodes in the graph
+/// the Bellman-Ford  algorithm. This function is multithreaded and will run
+/// launch a thread pool with threads equal to the number of CPUs by default.
+/// You can tune the number of threads with the ``RAYON_NUM_THREADS``
+/// environment variable. For example, setting ``RAYON_NUM_THREADS=4`` would
+/// limit the thread pool to 4 threads.
+///
+/// :param graph: The input :class:`~rustworkx.PyDiGraph` object to use
+/// :param edge_cost_fn: A callable object that acts as a weight function for
+///     an edge. It will accept a single positional argument, the edge's weight
+///     object and will return a float which will be used to represent the
+///     weight/cost of the edge
+///
+/// :return: A read-only dictionary of paths. The keys are source node indices
+///     and the values are dicts of the target node and the list of the
+///     node indices making up the shortest path to that node. For example::
+///
+///         {
+///             0: {1: [0, 1],  2: [0, 1, 2]},
+///             1: {2: [1, 2]},
+///             2: {0: [2, 0]},
+///         }
+///
+/// :rtype: AllPairsPathMapping
+///
+/// :raises: :class:`~rustworkx.NegativeCycle`: when there is a negative cycle and the shortest
+///     path is not defined.
+#[pyfunction]
+#[pyo3(text_signature = "(graph, edge_cost_fn, /)")]
+pub fn digraph_all_pairs_bellman_ford_shortest_paths(
+    py: Python,
+    graph: &digraph::PyDiGraph,
+    edge_cost_fn: PyObject,
+) -> PyResult<AllPairsPathMapping> {
+    all_pairs_bellman_ford::all_pairs_bellman_ford_shortest_paths(py, &graph.graph, edge_cost_fn)
+}
+
+/// For each node in the graph, calculates the lengths of the shortest paths
+/// to all others in a :class:`~rustworkx.PyGraph` object
+///
+/// This function will generate the shortest path from a source node using
+/// the Bellman-Ford  algorithm.
+///
+/// :param graph: The input :class:`~rustworkx.PyGraph` to use
+/// :param edge_cost_fn: A callable object that acts as a weight function for
+///     an edge. It will accept a single positional argument, the edge's weight
+///     object and will return a float which will be used to represent the
+///     weight/cost of the edge
+///
+/// :return: A read-only dictionary of path lengths. The keys are source
+///     node indices and the values are dicts of the target node and the length
+///     of the shortest path to that node. For example::
+///
+///         {
+///             0: {1: 2.0, 2: 2.0},
+///             1: {2: 1.0},
+///             2: {0: 1.0},
+///         }
+///
+/// :rtype: AllPairsPathLengthMapping
+///
+/// :raises: :class:`~rustworkx.NegativeCycle`: when there is a negative cycle and the shortest
+///     path is not defined.
+#[pyfunction]
+#[pyo3(text_signature = "(graph, edge_cost_fn, /)")]
+pub fn graph_all_pairs_bellman_ford_path_lengths(
+    py: Python,
+    graph: &graph::PyGraph,
+    edge_cost_fn: PyObject,
+) -> PyResult<AllPairsPathLengthMapping> {
+    all_pairs_bellman_ford::all_pairs_bellman_ford_path_lengths(py, &graph.graph, edge_cost_fn)
+}
+
+/// For each node in the graph, finds the shortest paths to all others in a
+/// :class:`~rustworkx.PyGraph` object
+///
+/// This function will generate the shortest path from a source node using
+/// the Bellman-Ford algorithm.
+///
+/// :param graph: The input :class:`~rustworkx.PyGraph` object to use
+/// :param edge_cost_fn: A callable object that acts as a weight function for
+///     an edge. It will accept a single positional argument, the edge's weight
+///     object and will return a float which will be used to represent the
+///     weight/cost of the edge
+///
+/// :return: A read-only dictionary of paths. The keys are destination node
+///     indices and the values are dicts of the target node and the list of the
+///     node indices making up the shortest path to that node. For example::
+///
+///         {
+///             0: {1: [0, 1],  2: [0, 1, 2]},
+///             1: {2: [1, 2]},
+///             2: {0: [2, 0]},
+///         }
+///
+/// :rtype: AllPairsPathMapping
+///
+/// :raises: :class:`~rustworkx.NegativeCycle`: when there is a negative cycle and the shortest
+///     path is not defined.
+#[pyfunction]
+#[pyo3(text_signature = "(graph, edge_cost_fn, /)")]
+pub fn graph_all_pairs_bellman_ford_shortest_paths(
+    py: Python,
+    graph: &graph::PyGraph,
+    edge_cost_fn: PyObject,
+) -> PyResult<AllPairsPathMapping> {
+    all_pairs_bellman_ford::all_pairs_bellman_ford_shortest_paths(py, &graph.graph, edge_cost_fn)
 }

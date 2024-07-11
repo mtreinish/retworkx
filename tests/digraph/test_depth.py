@@ -12,7 +12,7 @@
 
 import unittest
 
-import retworkx
+import rustworkx
 
 
 class TestLongestPath(unittest.TestCase):
@@ -29,7 +29,7 @@ class TestLongestPath(unittest.TestCase):
         | |
         f g
         """
-        dag = retworkx.PyDAG()
+        dag = rustworkx.PyDAG()
         node_a = dag.add_node("a")
         node_b = dag.add_child(node_a, "b", {})
         node_c = dag.add_child(node_b, "c", {})
@@ -37,14 +37,14 @@ class TestLongestPath(unittest.TestCase):
         node_e = dag.add_child(node_c, "e", {})
         node_f = dag.add_child(node_e, "f", {})
         dag.add_child(node_c, "g", {})
-        self.assertEqual(4, retworkx.dag_longest_path_length(dag))
+        self.assertEqual(4, rustworkx.dag_longest_path_length(dag))
         self.assertEqual(
             [node_a, node_b, node_c, node_e, node_f],
-            retworkx.dag_longest_path(dag),
+            rustworkx.dag_longest_path(dag),
         )
 
     def test_less_linear(self):
-        dag = retworkx.PyDAG()
+        dag = rustworkx.PyDAG()
         node_a = dag.add_node("a")
         node_b = dag.add_child(node_a, "b", {})
         node_c = dag.add_child(node_b, "c", {})
@@ -53,25 +53,25 @@ class TestLongestPath(unittest.TestCase):
         dag.add_edge(node_a, node_c, {})
         dag.add_edge(node_a, node_e, {})
         dag.add_edge(node_c, node_e, {})
-        self.assertEqual(4, retworkx.dag_longest_path_length(dag))
+        self.assertEqual(4, rustworkx.dag_longest_path_length(dag))
         self.assertEqual(
             [node_a, node_b, node_c, node_d, node_e],
-            retworkx.dag_longest_path(dag),
+            rustworkx.dag_longest_path(dag),
         )
 
     def test_degenerate_graph(self):
-        dag = retworkx.PyDAG()
+        dag = rustworkx.PyDAG()
         dag.add_node(0)
-        self.assertEqual(0, retworkx.dag_longest_path_length(dag))
-        self.assertEqual([0], retworkx.dag_longest_path(dag))
+        self.assertEqual(0, rustworkx.dag_longest_path_length(dag))
+        self.assertEqual([0], rustworkx.dag_longest_path(dag))
 
     def test_empty_graph(self):
-        dag = retworkx.PyDAG()
-        self.assertEqual(0, retworkx.dag_longest_path_length(dag))
-        self.assertEqual([], retworkx.dag_longest_path(dag))
+        dag = rustworkx.PyDAG()
+        self.assertEqual(0, rustworkx.dag_longest_path_length(dag))
+        self.assertEqual([], rustworkx.dag_longest_path(dag))
 
     def test_parallel_edges(self):
-        dag = retworkx.PyDiGraph()
+        dag = rustworkx.PyDiGraph()
         dag.extend_from_weighted_edge_list(
             [
                 (0, 1, 1),
@@ -84,7 +84,7 @@ class TestLongestPath(unittest.TestCase):
         )
         self.assertEqual(
             [0, 3, 4, 5],
-            retworkx.dag_longest_path(dag),
+            rustworkx.dag_longest_path(dag),
         )
 
     def test_linear_with_weight(self):
@@ -100,7 +100,7 @@ class TestLongestPath(unittest.TestCase):
         | |
         f g
         """
-        dag = retworkx.PyDAG()
+        dag = rustworkx.PyDAG()
         node_a = dag.add_node("a")
         node_b = dag.add_child(node_a, "b", 4)
         node_c = dag.add_child(node_b, "c", 4)
@@ -110,15 +110,15 @@ class TestLongestPath(unittest.TestCase):
         node_g = dag.add_child(node_c, "g", 15)
         self.assertEqual(
             [node_a, node_b, node_c, node_g],
-            retworkx.dag_longest_path(dag, lambda _, __, weight: weight),
+            rustworkx.dag_longest_path(dag, lambda _, __, weight: weight),
         )
         self.assertEqual(
             23,
-            retworkx.dag_longest_path_length(dag, lambda _, __, weight: weight),
+            rustworkx.dag_longest_path_length(dag, lambda _, __, weight: weight),
         )
 
     def test_parallel_edges_with_weights(self):
-        dag = retworkx.PyDiGraph()
+        dag = rustworkx.PyDiGraph()
         dag.extend_from_weighted_edge_list(
             [
                 (0, 1, 1),
@@ -131,17 +131,15 @@ class TestLongestPath(unittest.TestCase):
         )
         self.assertEqual(
             [0, 1, 2],
-            retworkx.dag_longest_path(dag, lambda _, __, weight: weight),
+            rustworkx.dag_longest_path(dag, lambda _, __, weight: weight),
         )
         self.assertEqual(
             4,
-            retworkx.dag_longest_path_length(
-                dag, weight_fn=lambda _, __, weight: weight
-            ),
+            rustworkx.dag_longest_path_length(dag, weight_fn=lambda _, __, weight: weight),
         )
 
     def test_less_linear_with_weight(self):
-        dag = retworkx.PyDAG()
+        dag = rustworkx.PyDAG()
         node_a = dag.add_node("a")
         node_b = dag.add_child(node_a, "b", 1)
         node_c = dag.add_child(node_b, "c", 1)
@@ -152,42 +150,30 @@ class TestLongestPath(unittest.TestCase):
         dag.add_edge(node_c, node_e, 3)
         self.assertEqual(
             6,
-            retworkx.dag_longest_path_length(
-                dag, weight_fn=lambda _, __, weight: weight
-            ),
+            rustworkx.dag_longest_path_length(dag, weight_fn=lambda _, __, weight: weight),
         )
         self.assertEqual(
             [node_a, node_c, node_e],
-            retworkx.dag_longest_path(
-                dag, weight_fn=lambda _, __, weight: weight
-            ),
+            rustworkx.dag_longest_path(dag, weight_fn=lambda _, __, weight: weight),
         )
 
     def test_degenerate_graph_with_weight(self):
-        dag = retworkx.PyDAG()
+        dag = rustworkx.PyDAG()
         dag.add_node(0)
-        self.assertEqual(
-            [0], retworkx.dag_longest_path(dag, weight_fn=weight_fn)
-        )
-        self.assertEqual(
-            0, retworkx.dag_longest_path_length(dag, weight_fn=weight_fn)
-        )
+        self.assertEqual([0], rustworkx.dag_longest_path(dag, weight_fn=weight_fn))
+        self.assertEqual(0, rustworkx.dag_longest_path_length(dag, weight_fn=weight_fn))
 
     def test_empty_graph_with_weights(self):
-        dag = retworkx.PyDAG()
-        self.assertEqual(
-            [], retworkx.dag_longest_path(dag, weight_fn=weight_fn)
-        )
-        self.assertEqual(
-            0, retworkx.dag_longest_path_length(dag, weight_fn=weight_fn)
-        )
+        dag = rustworkx.PyDAG()
+        self.assertEqual([], rustworkx.dag_longest_path(dag, weight_fn=weight_fn))
+        self.assertEqual(0, rustworkx.dag_longest_path_length(dag, weight_fn=weight_fn))
 
     def test_cycle(self):
-        not_a_dag = retworkx.generators.directed_cycle_graph(250)
-        with self.assertRaises(retworkx.DAGHasCycle):
-            retworkx.dag_longest_path_length(not_a_dag, lambda *_: 1.0)
-        with self.assertRaises(retworkx.DAGHasCycle):
-            retworkx.dag_longest_path(not_a_dag, lambda *_: 1.0)
+        not_a_dag = rustworkx.generators.directed_cycle_graph(250)
+        with self.assertRaises(rustworkx.DAGHasCycle):
+            rustworkx.dag_longest_path_length(not_a_dag, lambda *_: 1.0)
+        with self.assertRaises(rustworkx.DAGHasCycle):
+            rustworkx.dag_longest_path(not_a_dag, lambda *_: 1.0)
 
 
 def weight_fn(_, __, weight):
@@ -208,7 +194,7 @@ class TestWeightedLongestPath(unittest.TestCase):
         | |
         f g
         """
-        dag = retworkx.PyDAG()
+        dag = rustworkx.PyDAG()
         node_a = dag.add_node("a")
         node_b = dag.add_child(node_a, "b", 4)
         node_c = dag.add_child(node_b, "c", 4)
@@ -218,19 +204,15 @@ class TestWeightedLongestPath(unittest.TestCase):
         node_g = dag.add_child(node_c, "g", 15)
         self.assertEqual(
             23.0,
-            retworkx.dag_weighted_longest_path_length(
-                dag, lambda _, __, weight: float(weight)
-            ),
+            rustworkx.dag_weighted_longest_path_length(dag, lambda _, __, weight: float(weight)),
         )
         self.assertEqual(
             [node_a, node_b, node_c, node_g],
-            retworkx.dag_weighted_longest_path(
-                dag, lambda _, __, weight: float(weight)
-            ),
+            rustworkx.dag_weighted_longest_path(dag, lambda _, __, weight: float(weight)),
         )
 
     def test_parallel_edges_with_weights(self):
-        dag = retworkx.PyDiGraph()
+        dag = rustworkx.PyDiGraph()
         dag.extend_from_weighted_edge_list(
             [
                 (0, 1, 1),
@@ -243,19 +225,17 @@ class TestWeightedLongestPath(unittest.TestCase):
         )
         self.assertEqual(
             4.0,
-            retworkx.dag_weighted_longest_path_length(
+            rustworkx.dag_weighted_longest_path_length(
                 dag, weight_fn=lambda _, __, weight: float(weight)
             ),
         )
         self.assertEqual(
             [0, 1, 2],
-            retworkx.dag_weighted_longest_path(
-                dag, lambda _, __, weight: float(weight)
-            ),
+            rustworkx.dag_weighted_longest_path(dag, lambda _, __, weight: float(weight)),
         )
 
     def test_less_linear_with_weight(self):
-        dag = retworkx.PyDAG()
+        dag = rustworkx.PyDAG()
         node_a = dag.add_node("a")
         node_b = dag.add_child(node_a, "b", 1)
         node_c = dag.add_child(node_b, "c", 1)
@@ -266,62 +246,52 @@ class TestWeightedLongestPath(unittest.TestCase):
         dag.add_edge(node_c, node_e, 3)
         self.assertEqual(
             6.0,
-            retworkx.dag_weighted_longest_path_length(
+            rustworkx.dag_weighted_longest_path_length(
                 dag, weight_fn=lambda _, __, weight: float(weight)
             ),
         )
         self.assertEqual(
             [node_a, node_c, node_e],
-            retworkx.dag_weighted_longest_path(
-                dag, weight_fn=lambda _, __, weight: float(weight)
-            ),
+            rustworkx.dag_weighted_longest_path(dag, weight_fn=lambda _, __, weight: float(weight)),
         )
 
     def test_degenerate_graph_with_weight(self):
-        dag = retworkx.PyDAG()
+        dag = rustworkx.PyDAG()
         dag.add_node(0)
         self.assertEqual(
             0.0,
-            retworkx.dag_weighted_longest_path_length(
-                dag, lambda x: float(weight_fn(x))
-            ),
+            rustworkx.dag_weighted_longest_path_length(dag, lambda x: float(weight_fn(x))),
         )
         self.assertEqual(
             [0],
-            retworkx.dag_weighted_longest_path(
-                dag, lambda x: float(weight_fn(x))
-            ),
+            rustworkx.dag_weighted_longest_path(dag, lambda x: float(weight_fn(x))),
         )
 
     def test_empty_graph_with_weights(self):
-        dag = retworkx.PyDAG()
+        dag = rustworkx.PyDAG()
         self.assertEqual(
             0.0,
-            retworkx.dag_weighted_longest_path_length(
-                dag, lambda x: float(weight_fn(x))
-            ),
+            rustworkx.dag_weighted_longest_path_length(dag, lambda x: float(weight_fn(x))),
         )
         self.assertEqual(
             [],
-            retworkx.dag_weighted_longest_path(
-                dag, lambda x: float(weight_fn(x))
-            ),
+            rustworkx.dag_weighted_longest_path(dag, lambda x: float(weight_fn(x))),
         )
 
     def test_nan_not_valid_weight(self):
-        dag = retworkx.generators.directed_path_graph(526)
+        dag = rustworkx.generators.directed_path_graph(526)
 
         def weight_fn(*_):
             return float("nan")
 
         with self.assertRaises(ValueError):
-            retworkx.dag_weighted_longest_path_length(dag, weight_fn)
+            rustworkx.dag_weighted_longest_path_length(dag, weight_fn)
         with self.assertRaises(ValueError):
-            retworkx.dag_weighted_longest_path(dag, weight_fn)
+            rustworkx.dag_weighted_longest_path(dag, weight_fn)
 
     def test_cycle(self):
-        not_a_dag = retworkx.generators.directed_cycle_graph(250)
-        with self.assertRaises(retworkx.DAGHasCycle):
-            retworkx.dag_weighted_longest_path_length(not_a_dag, lambda *_: 1.0)
-        with self.assertRaises(retworkx.DAGHasCycle):
-            retworkx.dag_weighted_longest_path(not_a_dag, lambda *_: 1.0)
+        not_a_dag = rustworkx.generators.directed_cycle_graph(250)
+        with self.assertRaises(rustworkx.DAGHasCycle):
+            rustworkx.dag_weighted_longest_path_length(not_a_dag, lambda *_: 1.0)
+        with self.assertRaises(rustworkx.DAGHasCycle):
+            rustworkx.dag_weighted_longest_path(not_a_dag, lambda *_: 1.0)

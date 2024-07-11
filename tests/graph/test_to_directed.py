@@ -12,17 +12,17 @@
 
 import unittest
 
-import retworkx
+import rustworkx
 
 
 class TestToDirected(unittest.TestCase):
     def test_to_undirected_empty_graph(self):
-        graph = retworkx.PyGraph()
+        graph = rustworkx.PyGraph()
         digraph = graph.to_directed()
         self.assertEqual(0, len(digraph))
 
     def test_path_graph(self):
-        graph = retworkx.generators.path_graph(5)
+        graph = rustworkx.generators.path_graph(5)
         digraph = graph.to_directed()
         expected = [
             (0, 1, None),
@@ -37,7 +37,7 @@ class TestToDirected(unittest.TestCase):
         self.assertEqual(digraph.weighted_edge_list(), expected)
 
     def test_parallel_edge_graph(self):
-        graph = retworkx.PyGraph()
+        graph = rustworkx.PyGraph()
         graph.extend_from_weighted_edge_list(
             [
                 (0, 1, "A"),
@@ -60,7 +60,7 @@ class TestToDirected(unittest.TestCase):
         self.assertEqual(digraph.weighted_edge_list(), expected)
 
     def test_shared_ref(self):
-        graph = retworkx.PyGraph()
+        graph = rustworkx.PyGraph()
         node_weight = {"a": 1}
         node_a = graph.add_node(node_weight)
         edge_weight = {"a": 1}

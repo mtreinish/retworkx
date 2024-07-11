@@ -12,18 +12,18 @@
 
 import unittest
 
-import retworkx
+import rustworkx
 
 
 class TestCollectBicolorRuns(unittest.TestCase):
     def test_cycle(self):
-        dag = retworkx.PyDiGraph()
+        dag = rustworkx.PyDiGraph()
         dag.extend_from_edge_list([(0, 1), (1, 2), (2, 0)])
-        with self.assertRaises(retworkx.DAGHasCycle):
-            retworkx.collect_bicolor_runs(dag, lambda _: True, lambda _: None)
+        with self.assertRaises(rustworkx.DAGHasCycle):
+            rustworkx.collect_bicolor_runs(dag, lambda _: True, lambda _: None)
 
     def test_filter_function_inner_exception(self):
-        dag = retworkx.PyDiGraph()
+        dag = rustworkx.PyDiGraph()
         dag.add_node("a")
         dag.add_child(0, "b", None)
         dag.add_child(1, "c", None)
@@ -32,16 +32,16 @@ class TestCollectBicolorRuns(unittest.TestCase):
             raise IndexError("Things fail from time to time")
 
         with self.assertRaises(IndexError):
-            retworkx.collect_bicolor_runs(dag, fail_function, lambda _: None)
+            rustworkx.collect_bicolor_runs(dag, fail_function, lambda _: None)
 
         with self.assertRaises(IndexError):
-            retworkx.collect_bicolor_runs(dag, lambda _: True, fail_function)
+            rustworkx.collect_bicolor_runs(dag, lambda _: True, fail_function)
 
     def test_empty(self):
-        dag = retworkx.PyDAG()
+        dag = rustworkx.PyDAG()
         self.assertEqual(
             [],
-            retworkx.collect_bicolor_runs(dag, lambda _: True, lambda _: None),
+            rustworkx.collect_bicolor_runs(dag, lambda _: True, lambda _: None),
         )
 
     def test_two_colors(self):
@@ -75,7 +75,7 @@ class TestCollectBicolorRuns(unittest.TestCase):
 
         Expected: [[cx, cz]]
         """
-        dag = retworkx.PyDAG()
+        dag = rustworkx.PyDAG()
         q0_list = []
         q1_list = []
         for _ in range(2):
@@ -98,15 +98,15 @@ class TestCollectBicolorRuns(unittest.TestCase):
             else:
                 return None
 
-        def color_function(node):
-            if "q" in node:
-                return int(node[1:])
+        def color_function(edge):
+            if "q" in edge:
+                return int(edge[1:])
             else:
                 return None
 
         self.assertEqual(
             [["cx", "cz"]],
-            retworkx.collect_bicolor_runs(dag, filter_function, color_function),
+            rustworkx.collect_bicolor_runs(dag, filter_function, color_function),
         )
 
     def test_two_colors_with_pending(self):
@@ -160,7 +160,7 @@ class TestCollectBicolorRuns(unittest.TestCase):
 
         Expected: [[h, cx, cz, y]]
         """
-        dag = retworkx.PyDAG()
+        dag = rustworkx.PyDAG()
         q0_list = []
         q1_list = []
         for _ in range(2):
@@ -187,15 +187,15 @@ class TestCollectBicolorRuns(unittest.TestCase):
             else:
                 return None
 
-        def color_function(node):
-            if "q" in node:
-                return int(node[1:])
+        def color_function(edge):
+            if "q" in edge:
+                return int(edge[1:])
             else:
                 return None
 
         self.assertEqual(
             [["h", "cx", "cz", "y"]],
-            retworkx.collect_bicolor_runs(dag, filter_function, color_function),
+            rustworkx.collect_bicolor_runs(dag, filter_function, color_function),
         )
 
     def test_two_colors_with_barrier(self):
@@ -233,7 +233,7 @@ class TestCollectBicolorRuns(unittest.TestCase):
 
         Expected: [[cx], [cz]]
         """
-        dag = retworkx.PyDAG()
+        dag = rustworkx.PyDAG()
         q0_list = []
         q1_list = []
         for _ in range(2):
@@ -264,15 +264,15 @@ class TestCollectBicolorRuns(unittest.TestCase):
             else:
                 return None
 
-        def color_function(node):
-            if "q" in node:
-                return int(node[1:])
+        def color_function(edge):
+            if "q" in edge:
+                return int(edge[1:])
             else:
                 return None
 
         self.assertEqual(
             [["cx"], ["cz"]],
-            retworkx.collect_bicolor_runs(dag, filter_function, color_function),
+            rustworkx.collect_bicolor_runs(dag, filter_function, color_function),
         )
 
     def test_color_with_ignored_edge(self):
@@ -310,7 +310,7 @@ class TestCollectBicolorRuns(unittest.TestCase):
 
         Expected: []
         """
-        dag = retworkx.PyDAG()
+        dag = rustworkx.PyDAG()
         q0_list = []
         c0_list = []
         for _ in range(2):
@@ -338,13 +338,13 @@ class TestCollectBicolorRuns(unittest.TestCase):
             else:
                 return None
 
-        def color_function(node):
-            if "q" in node:
-                return int(node[1:])
+        def color_function(edge):
+            if "q" in edge:
+                return int(edge[1:])
             else:
                 return None
 
         self.assertEqual(
             [],
-            retworkx.collect_bicolor_runs(dag, filter_function, color_function),
+            rustworkx.collect_bicolor_runs(dag, filter_function, color_function),
         )

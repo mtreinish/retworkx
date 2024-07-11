@@ -12,7 +12,7 @@
 
 import unittest
 
-import retworkx
+import rustworkx
 
 
 class LayoutTest(unittest.TestCase):
@@ -22,23 +22,19 @@ class LayoutTest(unittest.TestCase):
         for k in exp:
             ev = exp[k]
             rv = res[k]
-            if (
-                abs(ev[0] - rv[0]) > self.thres
-                or abs(ev[1] - rv[1]) > self.thres
-            ):
+            if abs(ev[0] - rv[0]) > self.thres or abs(ev[1] - rv[1]) > self.thres:
                 self.fail(
-                    "The position for node %s, %s, differs from the expected "
-                    "position, %s by more than the allowed threshold of %s"
-                    % (k, rv, ev, self.thres)
+                    f"The position for node {k}, {rv}, differs from the expected "
+                    f"position, {ev} by more than the allowed threshold of {self.thres}"
                 )
 
 
 class TestRandomLayout(LayoutTest):
     def setUp(self):
-        self.graph = retworkx.generators.path_graph(10)
+        self.graph = rustworkx.generators.path_graph(10)
 
     def test_random_layout(self):
-        res = retworkx.graph_random_layout(self.graph, seed=42)
+        res = rustworkx.graph_random_layout(self.graph, seed=42)
         expected = {
             0: (0.2265125179283135, 0.23910669031859955),
             4: (0.8025885957751138, 0.37085692752109345),
@@ -54,9 +50,7 @@ class TestRandomLayout(LayoutTest):
         self.assertEqual(expected, res)
 
     def test_random_layout_center(self):
-        res = retworkx.graph_random_layout(
-            self.graph, center=(0.5, 0.5), seed=42
-        )
+        res = rustworkx.graph_random_layout(self.graph, center=(0.5, 0.5), seed=42)
         expected = {
             1: [1.260833410686741, 1.0278396573581516],
             5: [0.7363512785218512, 1.4286365888207462],
@@ -72,9 +66,9 @@ class TestRandomLayout(LayoutTest):
         self.assertEqual(expected, res)
 
     def test_random_layout_no_seed(self):
-        res = retworkx.graph_random_layout(self.graph)
+        res = rustworkx.graph_random_layout(self.graph)
         # Random output, just assert  structurally correct
-        self.assertIsInstance(res, retworkx.Pos2DMapping)
+        self.assertIsInstance(res, rustworkx.Pos2DMapping)
         self.assertEqual(len(res), 10)
         self.assertEqual(len(res[0]), 2)
         self.assertIsInstance(res[0][0], float)
@@ -82,16 +76,16 @@ class TestRandomLayout(LayoutTest):
 
 class TestBipartiteLayout(LayoutTest):
     def setUp(self):
-        self.graph = retworkx.generators.path_graph(10)
+        self.graph = rustworkx.generators.path_graph(10)
 
     def test_bipartite_layout_empty(self):
-        res = retworkx.bipartite_layout(retworkx.PyGraph(), set())
+        res = rustworkx.bipartite_layout(rustworkx.PyGraph(), set())
         self.assertEqual({}, res)
 
     def test_bipartite_layout_hole(self):
-        g = retworkx.generators.path_graph(5)
+        g = rustworkx.generators.path_graph(5)
         g.remove_nodes_from([1])
-        res = retworkx.bipartite_layout(g, set())
+        res = rustworkx.bipartite_layout(g, set())
         expected = {
             0: (0.0, -1.0),
             2: (0.0, -0.3333333333333333),
@@ -101,7 +95,7 @@ class TestBipartiteLayout(LayoutTest):
         self.assertLayoutEquiv(expected, res)
 
     def test_bipartite_layout(self):
-        res = retworkx.bipartite_layout(self.graph, {0, 1, 2, 3, 4})
+        res = rustworkx.bipartite_layout(self.graph, {0, 1, 2, 3, 4})
         expected = {
             0: (-1.0, -0.75),
             1: (-1.0, -0.375),
@@ -117,9 +111,7 @@ class TestBipartiteLayout(LayoutTest):
         self.assertLayoutEquiv(expected, res)
 
     def test_bipartite_layout_horizontal(self):
-        res = retworkx.bipartite_layout(
-            self.graph, {0, 1, 2, 3}, horizontal=True
-        )
+        res = rustworkx.bipartite_layout(self.graph, {0, 1, 2, 3}, horizontal=True)
         expected = {
             0: (1.0, -0.9),
             1: (0.3333333333333333, -0.9),
@@ -135,7 +127,7 @@ class TestBipartiteLayout(LayoutTest):
         self.assertLayoutEquiv(expected, res)
 
     def test_bipartite_layout_scale(self):
-        res = retworkx.bipartite_layout(self.graph, {0, 1, 2}, scale=2)
+        res = rustworkx.bipartite_layout(self.graph, {0, 1, 2}, scale=2)
         expected = {
             0: (-2.0, -1.0714285714285714),
             1: (-2.0, 2.3790493384824785e-17),
@@ -151,9 +143,7 @@ class TestBipartiteLayout(LayoutTest):
         self.assertLayoutEquiv(expected, res)
 
     def test_bipartite_layout_center(self):
-        res = retworkx.bipartite_layout(
-            self.graph, {4, 5, 6}, center=(0.5, 0.5)
-        )
+        res = rustworkx.bipartite_layout(self.graph, {4, 5, 6}, center=(0.5, 0.5))
         expected = {
             4: (-0.5, -0.0357142857142857),
             5: (-0.5, 0.5),
@@ -169,7 +159,7 @@ class TestBipartiteLayout(LayoutTest):
         self.assertLayoutEquiv(expected, res)
 
     def test_bipartite_layout_ratio(self):
-        res = retworkx.bipartite_layout(self.graph, {2, 4, 8}, aspect_ratio=4)
+        res = rustworkx.bipartite_layout(self.graph, {2, 4, 8}, aspect_ratio=4)
         expected = {
             8: [-1.0, 0.17857142857142858],
             2: [-1.0, -0.17857142857142858],
@@ -187,20 +177,20 @@ class TestBipartiteLayout(LayoutTest):
 
 class TestCircularLayout(LayoutTest):
     def setUp(self):
-        self.graph = retworkx.generators.path_graph(10)
+        self.graph = rustworkx.generators.path_graph(10)
 
     def test_circular_layout_empty(self):
-        res = retworkx.circular_layout(retworkx.PyGraph())
+        res = rustworkx.circular_layout(rustworkx.PyGraph())
         self.assertEqual({}, res)
 
     def test_circular_layout_one_node(self):
-        res = retworkx.circular_layout(retworkx.generators.path_graph(1))
+        res = rustworkx.circular_layout(rustworkx.generators.path_graph(1))
         self.assertEqual({0: (0.0, 0.0)}, res)
 
     def test_circular_layout_hole(self):
-        g = retworkx.generators.path_graph(5)
+        g = rustworkx.generators.path_graph(5)
         g.remove_nodes_from([1])
-        res = retworkx.circular_layout(g)
+        res = rustworkx.circular_layout(g)
         expected = {
             0: (0.999999986090933, 2.1855693665697608e-08),
             2: (-3.576476059301554e-08, 1.0),
@@ -210,7 +200,7 @@ class TestCircularLayout(LayoutTest):
         self.assertLayoutEquiv(expected, res)
 
     def test_circular_layout(self):
-        res = retworkx.circular_layout(self.graph)
+        res = rustworkx.circular_layout(self.graph)
         expected = {
             0: (1.0, 2.662367085193061e-08),
             1: (0.8090170042900712, 0.5877852653564984),
@@ -226,7 +216,7 @@ class TestCircularLayout(LayoutTest):
         self.assertLayoutEquiv(expected, res)
 
     def test_circular_layout_scale(self):
-        res = retworkx.circular_layout(self.graph, scale=2)
+        res = rustworkx.circular_layout(self.graph, scale=2)
         expected = {
             0: (2.0, 5.324734170386122e-08),
             1: (1.6180340085801423, 1.1755705307129969),
@@ -242,7 +232,7 @@ class TestCircularLayout(LayoutTest):
         self.assertLayoutEquiv(expected, res)
 
     def test_circular_layout_center(self):
-        res = retworkx.circular_layout(self.graph, center=(0.5, 0.5))
+        res = rustworkx.circular_layout(self.graph, center=(0.5, 0.5))
         expected = {
             0: (1.5, 0.5000000266236708),
             1: (1.3090170042900713, 1.0877852653564983),
@@ -260,20 +250,20 @@ class TestCircularLayout(LayoutTest):
 
 class TestShellLayout(LayoutTest):
     def setUp(self):
-        self.graph = retworkx.generators.path_graph(10)
+        self.graph = rustworkx.generators.path_graph(10)
 
     def test_shell_layout_empty(self):
-        res = retworkx.circular_layout(retworkx.PyGraph())
+        res = rustworkx.circular_layout(rustworkx.PyGraph())
         self.assertEqual({}, res)
 
     def test_shell_layout_one_node(self):
-        res = retworkx.shell_layout(retworkx.generators.path_graph(1))
+        res = rustworkx.shell_layout(rustworkx.generators.path_graph(1))
         self.assertEqual({0: (0.0, 0.0)}, res)
 
     def test_shell_layout_hole(self):
-        g = retworkx.generators.path_graph(5)
+        g = rustworkx.generators.path_graph(5)
         g.remove_nodes_from([1])
-        res = retworkx.shell_layout(g)
+        res = rustworkx.shell_layout(g)
         expected = {
             0: (-1.0, -8.742277657347586e-08),
             2: (1.1924880638503055e-08, -1.0),
@@ -283,9 +273,9 @@ class TestShellLayout(LayoutTest):
         self.assertLayoutEquiv(expected, res)
 
     def test_shell_layout_hole_two_shells(self):
-        g = retworkx.generators.path_graph(5)
+        g = rustworkx.generators.path_graph(5)
         g.remove_nodes_from([2])
-        res = retworkx.shell_layout(g, [[0, 1], [3, 4]])
+        res = rustworkx.shell_layout(g, [[0, 1], [3, 4]])
         expected = {
             0: (-2.1855694143368964e-08, 0.5),
             1: (5.962440319251527e-09, -0.5),
@@ -295,7 +285,7 @@ class TestShellLayout(LayoutTest):
         self.assertLayoutEquiv(expected, res)
 
     def test_shell_layout(self):
-        res = retworkx.shell_layout(self.graph)
+        res = rustworkx.shell_layout(self.graph)
         expected = {
             0: (-1.0, -8.742277657347586e-08),
             1: (-0.8090169429779053, -0.5877853631973267),
@@ -311,9 +301,7 @@ class TestShellLayout(LayoutTest):
         self.assertLayoutEquiv(expected, res)
 
     def test_shell_layout_nlist(self):
-        res = retworkx.shell_layout(
-            self.graph, nlist=[[0, 2], [1, 3], [4, 9], [8, 7], [6, 5]]
-        )
+        res = rustworkx.shell_layout(self.graph, nlist=[[0, 2], [1, 3], [4, 9], [8, 7], [6, 5]])
         expected = {
             0: (0.16180340945720673, 0.11755704879760742),
             2: (-0.16180339455604553, -0.11755707114934921),
@@ -329,7 +317,7 @@ class TestShellLayout(LayoutTest):
         self.assertLayoutEquiv(expected, res)
 
     def test_shell_layout_rotate(self):
-        res = retworkx.shell_layout(
+        res = rustworkx.shell_layout(
             self.graph, nlist=[[0, 1, 2], [3, 4, 5], [6, 7, 8], [9]], rotate=0.5
         )
         expected = {
@@ -347,9 +335,7 @@ class TestShellLayout(LayoutTest):
         self.assertLayoutEquiv(expected, res)
 
     def test_shell_layout_scale(self):
-        res = retworkx.shell_layout(
-            self.graph, nlist=[[0, 1, 2, 3, 4], [9, 8, 7, 6, 5]], scale=2
-        )
+        res = rustworkx.shell_layout(self.graph, nlist=[[0, 1, 2, 3, 4], [9, 8, 7, 6, 5]], scale=2)
         expected = {
             0: (-4.371138828673793e-08, 1.0),
             1: (-0.9510565996170044, 0.30901679396629333),
@@ -365,7 +351,7 @@ class TestShellLayout(LayoutTest):
         self.assertLayoutEquiv(expected, res)
 
     def test_shell_layout_center(self):
-        res = retworkx.shell_layout(
+        res = rustworkx.shell_layout(
             self.graph,
             nlist=[[0, 1, 2, 3, 4], [9, 8, 7, 6, 5]],
             center=(0.5, 0.5),
@@ -387,20 +373,20 @@ class TestShellLayout(LayoutTest):
 
 class TestSpiralLayout(LayoutTest):
     def setUp(self):
-        self.graph = retworkx.generators.path_graph(10)
+        self.graph = rustworkx.generators.path_graph(10)
 
     def test_spiral_layout_empty(self):
-        res = retworkx.spiral_layout(retworkx.PyGraph())
+        res = rustworkx.spiral_layout(rustworkx.PyGraph())
         self.assertEqual({}, res)
 
     def test_spiral_layout_one_node(self):
-        res = retworkx.spiral_layout(retworkx.generators.path_graph(1))
+        res = rustworkx.spiral_layout(rustworkx.generators.path_graph(1))
         self.assertEqual({0: (0.0, 0.0)}, res)
 
     def test_spiral_layout_hole(self):
-        g = retworkx.generators.path_graph(5)
+        g = rustworkx.generators.path_graph(5)
         g.remove_nodes_from([1])
-        res = retworkx.spiral_layout(g)
+        res = rustworkx.spiral_layout(g)
         expected = {
             0: (-0.6415327868391166, -0.6855508729419231),
             2: (-0.03307913182988828, -0.463447951079834),
@@ -410,7 +396,7 @@ class TestSpiralLayout(LayoutTest):
         self.assertLayoutEquiv(expected, res)
 
     def test_spiral_layout(self):
-        res = retworkx.spiral_layout(self.graph)
+        res = rustworkx.spiral_layout(self.graph)
         expected = {
             0: (0.3083011152777303, -0.36841870322845377),
             1: (0.4448595378922136, -0.3185709877650719),
@@ -426,7 +412,7 @@ class TestSpiralLayout(LayoutTest):
         self.assertLayoutEquiv(expected, res)
 
     def test_spiral_layout_scale(self):
-        res = retworkx.spiral_layout(self.graph, scale=2)
+        res = rustworkx.spiral_layout(self.graph, scale=2)
         expected = {
             0: (0.6166022305554606, -0.7368374064569075),
             1: (0.8897190757844272, -0.6371419755301438),
@@ -442,7 +428,7 @@ class TestSpiralLayout(LayoutTest):
         self.assertLayoutEquiv(expected, res)
 
     def test_spiral_layout_center(self):
-        res = retworkx.spiral_layout(self.graph, center=(1, 1))
+        res = rustworkx.spiral_layout(self.graph, center=(1, 1))
         expected = {
             0: (1.3083011152777302, 0.6315812967715462),
             1: (1.4448595378922136, 0.681429012234928),
@@ -458,7 +444,7 @@ class TestSpiralLayout(LayoutTest):
         self.assertLayoutEquiv(expected, res)
 
     def test_spiral_layout_resolution(self):
-        res = retworkx.spiral_layout(self.graph, resolution=0.6)
+        res = rustworkx.spiral_layout(self.graph, resolution=0.6)
         expected = {
             0: (0.14170895375949058, 0.22421978768273812),
             1: (0.2657196183870804, 0.30906004798138936),
@@ -474,7 +460,7 @@ class TestSpiralLayout(LayoutTest):
         self.assertLayoutEquiv(expected, res)
 
     def test_spiral_layout_equidistant(self):
-        res = retworkx.spiral_layout(self.graph, equidistant=True)
+        res = rustworkx.spiral_layout(self.graph, equidistant=True)
         expected = {
             0: (-0.13161882865656718, -0.7449342807652114),
             1: (0.7160560542246066, -0.6335352483233974),

@@ -12,49 +12,43 @@
 
 import unittest
 
-import retworkx
+import rustworkx
 
 
 class TestToUndirected(unittest.TestCase):
     def test_to_undirected_empty_graph(self):
-        digraph = retworkx.PyDiGraph()
+        digraph = rustworkx.PyDiGraph()
         graph = digraph.to_undirected()
         self.assertEqual(0, len(graph))
 
     def test_single_direction_graph(self):
-        digraph = retworkx.generators.directed_path_graph(5)
+        digraph = rustworkx.generators.directed_path_graph(5)
         graph = digraph.to_undirected()
-        self.assertEqual(
-            digraph.weighted_edge_list(), graph.weighted_edge_list()
-        )
+        self.assertEqual(digraph.weighted_edge_list(), graph.weighted_edge_list())
 
     def test_bidirectional_graph(self):
-        digraph = retworkx.generators.directed_path_graph(5)
+        digraph = rustworkx.generators.directed_path_graph(5)
         for i in range(0, 4):
             digraph.add_edge(i + 1, i, None)
         graph = digraph.to_undirected()
-        self.assertEqual(
-            digraph.weighted_edge_list(), graph.weighted_edge_list()
-        )
+        self.assertEqual(digraph.weighted_edge_list(), graph.weighted_edge_list())
 
     def test_bidirectional_not_multigraph(self):
-        digraph = retworkx.generators.directed_path_graph(5)
+        digraph = rustworkx.generators.directed_path_graph(5)
         for i in range(0, 4):
             digraph.add_edge(i + 1, i, None)
         graph = digraph.to_undirected(multigraph=False)
         self.assertEqual(graph.edge_list(), [(0, 1), (1, 2), (2, 3), (3, 4)])
 
     def test_multiple_edges_combo_weight_not_multigraph(self):
-        digraph = retworkx.PyDiGraph()
+        digraph = rustworkx.PyDiGraph()
         digraph.add_nodes_from([0, 1])
         digraph.add_edges_from([(0, 1, "a"), (0, 1, "b")])
-        graph = digraph.to_undirected(
-            multigraph=False, weight_combo_fn=lambda x, y: x + y
-        )
+        graph = digraph.to_undirected(multigraph=False, weight_combo_fn=lambda x, y: x + y)
         self.assertEqual(graph.weighted_edge_list(), [(0, 1, "ab")])
 
     def test_shared_ref(self):
-        digraph = retworkx.PyDiGraph()
+        digraph = rustworkx.PyDiGraph()
         node_weight = {"a": 1}
         node_a = digraph.add_node(node_weight)
         edge_weight = {"a": 1}

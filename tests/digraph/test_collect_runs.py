@@ -12,12 +12,12 @@
 
 import unittest
 
-import retworkx
+import rustworkx
 
 
 class TestCollectRuns(unittest.TestCase):
     def test_dagcircuit_basic(self):
-        dag = retworkx.PyDAG()
+        dag = rustworkx.PyDAG()
         qr_0_in = dag.add_node("qr[0]")
         qr_0_out = dag.add_node("qr[0]")
         qr_1_in = dag.add_node("qr[1]")
@@ -51,12 +51,12 @@ class TestCollectRuns(unittest.TestCase):
         def filter_function(node):
             return node in ["h", "x"]
 
-        res = retworkx.collect_runs(dag, filter_function)
+        res = rustworkx.collect_runs(dag, filter_function)
         expected = [["h", "x"], ["x"]]
         self.assertEqual(expected, res)
 
     def test_multiple_successor_edges(self):
-        dag = retworkx.PyDiGraph()
+        dag = rustworkx.PyDiGraph()
         q0, q1 = dag.add_nodes_from(["q0", "q1"])
         cx_1 = dag.add_child(q0, "cx", "q0")
         dag.add_edge(q1, cx_1, "q1")
@@ -68,17 +68,17 @@ class TestCollectRuns(unittest.TestCase):
         def filter_function(node):
             return node == "cx"
 
-        res = retworkx.collect_runs(dag, filter_function)
+        res = rustworkx.collect_runs(dag, filter_function)
         self.assertEqual([["cx", "cx", "cx"]], res)
 
     def test_cycle(self):
-        dag = retworkx.PyDiGraph()
+        dag = rustworkx.PyDiGraph()
         dag.extend_from_edge_list([(0, 1), (1, 2), (2, 0)])
-        with self.assertRaises(retworkx.DAGHasCycle):
-            retworkx.collect_runs(dag, lambda _: True)
+        with self.assertRaises(rustworkx.DAGHasCycle):
+            rustworkx.collect_runs(dag, lambda _: True)
 
     def test_filter_function_inner_exception(self):
-        dag = retworkx.PyDiGraph()
+        dag = rustworkx.PyDiGraph()
         dag.add_node("a")
         dag.add_child(0, "b", None)
 
@@ -86,14 +86,14 @@ class TestCollectRuns(unittest.TestCase):
             raise IndexError("Things fail from time to time")
 
         with self.assertRaises(IndexError):
-            retworkx.collect_runs(dag, filter_function)
+            rustworkx.collect_runs(dag, filter_function)
 
     def test_empty(self):
-        dag = retworkx.PyDAG()
-        self.assertEqual([], retworkx.collect_runs(dag, lambda _: True))
+        dag = rustworkx.PyDAG()
+        self.assertEqual([], rustworkx.collect_runs(dag, lambda _: True))
 
     def test_h_h_cx(self):
-        dag = retworkx.PyDiGraph()
+        dag = rustworkx.PyDiGraph()
         q0, q1 = dag.add_nodes_from(["q0", "q1"])
         h_1 = dag.add_child(q0, "h", "q0")
         h_2 = dag.add_child(q1, "h", "q1")
@@ -103,11 +103,11 @@ class TestCollectRuns(unittest.TestCase):
         def filter_function(node):
             return node in ["cx", "h"]
 
-        res = retworkx.collect_runs(dag, filter_function)
+        res = rustworkx.collect_runs(dag, filter_function)
         self.assertEqual([["h", "cx"], ["h"]], res)
 
     def test_cx_h_h_cx(self):
-        dag = retworkx.PyDiGraph()
+        dag = rustworkx.PyDiGraph()
         q0, q1 = dag.add_nodes_from(["q0", "q1"])
         cx_1 = dag.add_child(q0, "cx", "q0")
         dag.add_edge(q1, cx_1, "q1")
@@ -119,11 +119,11 @@ class TestCollectRuns(unittest.TestCase):
         def filter_function(node):
             return node in ["cx", "h"]
 
-        res = retworkx.collect_runs(dag, filter_function)
+        res = rustworkx.collect_runs(dag, filter_function)
         self.assertEqual([["cx"], ["h", "cx"], ["h"]], res)
 
     def test_cx_h_cx(self):
-        dag = retworkx.PyDiGraph()
+        dag = rustworkx.PyDiGraph()
         q0, q1 = dag.add_nodes_from(["q0", "q1"])
         cx_1 = dag.add_child(q0, "cx", "q0")
         dag.add_edge(q1, cx_1, "q1")
@@ -134,5 +134,5 @@ class TestCollectRuns(unittest.TestCase):
         def filter_function(node):
             return node in ["cx", "h"]
 
-        res = retworkx.collect_runs(dag, filter_function)
+        res = rustworkx.collect_runs(dag, filter_function)
         self.assertEqual([["cx"], ["h", "cx"]], res)

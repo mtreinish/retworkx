@@ -12,12 +12,12 @@
 
 import unittest
 
-import retworkx
+import rustworkx
 
 
 class TestKShortestpath(unittest.TestCase):
     def test_digraph_k_shortest_path_lengths(self):
-        graph = retworkx.PyDiGraph()
+        graph = rustworkx.PyDiGraph()
         graph.add_nodes_from(list(range(8)))
         graph.add_edges_from_no_data(
             [
@@ -32,7 +32,7 @@ class TestKShortestpath(unittest.TestCase):
                 (7, 5),
             ]
         )
-        res = retworkx.digraph_k_shortest_path_lengths(graph, 1, 2, lambda _: 1)
+        res = rustworkx.digraph_k_shortest_path_lengths(graph, 1, 2, lambda _: 1)
         expected = {
             0: 7.0,
             1: 4.0,
@@ -46,7 +46,7 @@ class TestKShortestpath(unittest.TestCase):
         self.assertEqual(res, expected)
 
     def test_digraph_k_shortest_path_lengths_with_goal(self):
-        graph = retworkx.PyDiGraph()
+        graph = rustworkx.PyDiGraph()
         graph.add_nodes_from(list(range(8)))
         graph.add_edges_from_no_data(
             [
@@ -61,15 +61,36 @@ class TestKShortestpath(unittest.TestCase):
                 (7, 5),
             ]
         )
-        res = retworkx.digraph_k_shortest_path_lengths(
-            graph, 1, 2, lambda _: 1, 3
-        )
+        res = rustworkx.digraph_k_shortest_path_lengths(graph, 1, 2, lambda _: 1, 3)
         self.assertEqual(res, {3: 6})
 
     def test_digraph_k_shortest_path_with_goal_node_hole(self):
-        graph = retworkx.generators.directed_path_graph(4)
+        graph = rustworkx.generators.directed_path_graph(4)
         graph.remove_node(0)
-        res = retworkx.digraph_k_shortest_path_lengths(
+        res = rustworkx.digraph_k_shortest_path_lengths(
             graph, start=1, k=1, edge_cost=lambda _: 1, goal=3
         )
         self.assertEqual({3: 2}, res)
+
+    def test_digraph_k_shortest_path_with_invalid_weight(self):
+        graph = rustworkx.generators.directed_path_graph(4)
+        for invalid_weight in [float("nan"), -1]:
+            with self.subTest(invalid_weight=invalid_weight):
+                with self.assertRaises(ValueError):
+                    rustworkx.digraph_k_shortest_path_lengths(
+                        graph,
+                        start=1,
+                        k=1,
+                        edge_cost=lambda _: invalid_weight,
+                        goal=3,
+                    )
+
+    def test_k_shortest_path_with_no_path(self):
+        g = rustworkx.PyDiGraph()
+        a = g.add_node("A")
+        b = g.add_node("B")
+        path_lenghts = rustworkx.digraph_k_shortest_path_lengths(
+            g, start=a, k=1, edge_cost=float, goal=b
+        )
+        expected = {}
+        self.assertEqual(expected, path_lenghts)

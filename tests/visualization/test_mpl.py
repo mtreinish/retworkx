@@ -16,8 +16,8 @@
 import os
 import unittest
 
-import retworkx
-from retworkx.visualization import mpl_draw
+import rustworkx
+from rustworkx.visualization import mpl_draw
 
 try:
     import matplotlib as mpl
@@ -29,7 +29,7 @@ try:
 except ImportError:
     HAS_MPL = False
 
-SAVE_IMAGES = os.getenv("RETWORKX_TEST_PRESERVE_IMAGES", None)
+SAVE_IMAGES = os.getenv("RUSTWORKX_TEST_PRESERVE_IMAGES", None)
 
 
 def _save_images(fig, path):
@@ -44,19 +44,19 @@ def _save_images(fig, path):
 @unittest.skipUnless(HAS_MPL, "matplotlib is required for running these tests")
 class TestMPLDraw(unittest.TestCase):
     def test_draw(self):
-        graph = retworkx.generators.star_graph(24)
+        graph = rustworkx.generators.star_graph(24)
         options = {"node_color": "black", "node_size": 100, "width": 3}
         fig = mpl_draw(graph, **options)
         _save_images(fig, "test.png")
 
     def test_node_list(self):
-        graph = retworkx.generators.star_graph(24)
+        graph = rustworkx.generators.star_graph(24)
         node_list = list(range(4)) + list(range(4, 10)) + list(range(10, 14))
         fig = mpl_draw(graph, node_list=node_list)
         _save_images(fig, "test_node_list.png")
 
     def test_edge_colormap(self):
-        graph = retworkx.generators.star_graph(24)
+        graph = rustworkx.generators.star_graph(24)
         colors = range(len(graph.edge_list()))
         fig = mpl_draw(
             graph,
@@ -68,25 +68,25 @@ class TestMPLDraw(unittest.TestCase):
         _save_images(fig, "test_edge_colors.png")
 
     def test_arrows(self):
-        graph = retworkx.generators.directed_star_graph(24)
+        graph = rustworkx.generators.directed_star_graph(24)
         fig = mpl_draw(graph)
         _save_images(fig, "test_arrows.png")
 
     def test_empty_graph(self):
-        graph = retworkx.PyGraph()
+        graph = rustworkx.PyGraph()
         fig = mpl_draw(graph)
         _save_images(fig, "test_empty.png")
 
     def test_axes(self):
         fig, ax = plt.subplots()
-        graph = retworkx.directed_gnp_random_graph(50, 0.75)
+        graph = rustworkx.directed_gnp_random_graph(50, 0.75)
         mpl_draw(graph, ax=ax)
         _save_images(fig, "test_axes.png")
 
     def test_selfloop_with_single_edge_in_edge_list(self):
         fig, ax = plt.subplots()
         # Graph with selfloop
-        graph = retworkx.generators.path_graph(2)
+        graph = rustworkx.generators.path_graph(2)
         graph.add_edge(1, 1, None)
         pos = {n: (n, n) for n in graph.node_indexes()}
         mpl_draw(graph, pos, ax=ax, edge_list=[(1, 1)])
@@ -106,7 +106,7 @@ class TestMPLDraw(unittest.TestCase):
            s   -----------------------   t
         """
         node_shapes = ["o", "s"]
-        graph = retworkx.PyGraph()
+        graph = rustworkx.PyGraph()
         graph.extend_from_edge_list([(0, 1)])
         pos = {0: (0, 0), 1: (1, 0)}  # horizontal layout
 
@@ -124,7 +124,7 @@ class TestMPLDraw(unittest.TestCase):
                 _save_images(fig, "test_node_shape_%s.png" % node_shape)
 
     def test_alpha_iter(self):
-        graph = retworkx.generators.grid_graph(4, 6)
+        graph = rustworkx.generators.grid_graph(4, 6)
         # with fewer alpha elements than nodes
         plt.subplot(131)
         mpl_draw(graph, alpha=[0.1, 0.2])
@@ -142,7 +142,7 @@ class TestMPLDraw(unittest.TestCase):
         _save_images(fig, "test_alpha_iter.png")
 
     def test_labels_and_colors(self):
-        graph = retworkx.PyGraph()
+        graph = rustworkx.PyGraph()
         graph.add_nodes_from(list(range(8)))
         edge_list = [
             (0, 1, 5),
@@ -164,7 +164,7 @@ class TestMPLDraw(unittest.TestCase):
         labels[6] = r"$\gamma$"
         labels[7] = r"$\delta$"
         graph.add_edges_from(edge_list)
-        pos = retworkx.random_layout(graph)
+        pos = rustworkx.random_layout(graph)
         mpl_draw(
             graph,
             pos=pos,
@@ -192,3 +192,15 @@ class TestMPLDraw(unittest.TestCase):
         )
         fig = plt.gcf()
         _save_images(fig, "test_labels_and_colors.png")
+
+    def test_hexagonal_lattice_undirected(self):
+        graph = rustworkx.generators.hexagonal_lattice_graph(3, 4, with_positions=True)
+        plt.close("all")
+        mpl_draw(graph, pos=[graph.get_node_data(n) for n in range(len(graph))])
+        _save_images(plt.gcf(), "test_hexagonal_lattice.png")
+
+    def test_hexagonal_lattice_directed(self):
+        graph = rustworkx.generators.directed_hexagonal_lattice_graph(3, 4, with_positions=True)
+        plt.close("all")
+        mpl_draw(graph, pos=[graph.get_node_data(n) for n in range(len(graph))])
+        _save_images(plt.gcf(), "test_hexagonal_lattice_directed.png")

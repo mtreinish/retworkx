@@ -12,12 +12,12 @@
 
 import unittest
 
-import retworkx
+import rustworkx
 
 
 class TestDijkstraGraph(unittest.TestCase):
     def setUp(self):
-        self.graph = retworkx.PyGraph()
+        self.graph = rustworkx.PyGraph()
         self.a = self.graph.add_node("A")
         self.b = self.graph.add_node("B")
         self.c = self.graph.add_node("C")
@@ -35,14 +35,14 @@ class TestDijkstraGraph(unittest.TestCase):
         self.graph.add_edge(self.e, self.f, 6)
 
     def test_dijkstra(self):
-        path = retworkx.graph_dijkstra_shortest_path_lengths(
+        path = rustworkx.graph_dijkstra_shortest_path_lengths(
             self.graph, self.a, lambda x: float(x), self.e
         )
         expected = {4: 20.0}
         self.assertEqual(expected, path)
 
     def test_dijkstra_path(self):
-        path = retworkx.graph_dijkstra_shortest_paths(
+        path = rustworkx.graph_dijkstra_shortest_paths(
             self.graph, self.a, weight_fn=lambda x: float(x), target=self.e
         )
         # a -> d -> e = 23
@@ -50,15 +50,38 @@ class TestDijkstraGraph(unittest.TestCase):
         expected = {4: [self.a, self.c, self.d, self.e]}
         self.assertEqual(expected, path)
 
+    def test_dijkstra_has_path(self):
+        g = rustworkx.PyGraph()
+        a = g.add_node("A")
+        b = g.add_node("B")
+        c = g.add_node("C")
+
+        edge_list = [
+            (a, b, 7),
+            (c, b, 9),
+            (c, b, 10),
+        ]
+        g.add_edges_from(edge_list)
+
+        self.assertTrue(rustworkx.graph_has_path(g, a, c))
+
     def test_dijkstra_with_no_goal_set(self):
-        path = retworkx.graph_dijkstra_shortest_path_lengths(
-            self.graph, self.a, lambda x: 1
-        )
+        path = rustworkx.graph_dijkstra_shortest_path_lengths(self.graph, self.a, lambda x: 1)
         expected = {1: 1.0, 2: 1.0, 3: 1.0, 4: 2.0, 5: 2.0}
         self.assertEqual(expected, path)
 
+    def test_dijkstra_length_with_no_path(self):
+        g = rustworkx.PyGraph()
+        a = g.add_node("A")
+        b = g.add_node("B")
+        path_lenghts = rustworkx.graph_dijkstra_shortest_path_lengths(
+            g, a, edge_cost_fn=float, goal=b
+        )
+        expected = {}
+        self.assertEqual(expected, path_lenghts)
+
     def test_dijkstra_path_with_no_goal_set(self):
-        path = retworkx.graph_dijkstra_shortest_paths(self.graph, self.a)
+        path = rustworkx.graph_dijkstra_shortest_paths(self.graph, self.a)
         expected = {
             1: [0, 1],
             2: [0, 2],
@@ -69,50 +92,42 @@ class TestDijkstraGraph(unittest.TestCase):
         self.assertEqual(expected, path)
 
     def test_dijkstra_with_no_path(self):
-        g = retworkx.PyGraph()
+        g = rustworkx.PyGraph()
         a = g.add_node("A")
         g.add_node("B")
-        path = retworkx.graph_dijkstra_shortest_path_lengths(
-            g, a, lambda x: float(x)
-        )
+        path = rustworkx.graph_dijkstra_shortest_path_lengths(g, a, lambda x: float(x))
         expected = {}
         self.assertEqual(expected, path)
 
     def test_dijkstra_path_with_no_path(self):
-        g = retworkx.PyGraph()
+        g = rustworkx.PyGraph()
         a = g.add_node("A")
         g.add_node("B")
-        path = retworkx.graph_dijkstra_shortest_paths(
-            g, a, weight_fn=lambda x: float(x)
-        )
+        path = rustworkx.graph_dijkstra_shortest_paths(g, a, weight_fn=lambda x: float(x))
         expected = {}
         self.assertEqual(expected, path)
 
     def test_dijkstra_with_disconnected_nodes(self):
-        g = retworkx.PyDiGraph()
+        g = rustworkx.PyGraph()
         a = g.add_node("A")
         b = g.add_node("B")
         g.add_edge(a, b, 1.2)
         g.add_node("C")
         d = g.add_node("D")
         g.add_edge(b, d, 2.4)
-        path = retworkx.digraph_dijkstra_shortest_path_lengths(
-            g, a, lambda x: round(x, 1)
-        )
+        path = rustworkx.graph_dijkstra_shortest_path_lengths(g, a, lambda x: round(x, 1))
         # Computers never work:
         expected = {1: 1.2, 3: 3.5999999999999996}
         self.assertEqual(expected, path)
 
     def test_dijkstra_graph_with_digraph_input(self):
-        g = retworkx.PyDAG()
+        g = rustworkx.PyDAG()
         g.add_node(0)
         with self.assertRaises(TypeError):
-            retworkx.graph_dijkstra_shortest_path_lengths(g, 0, lambda x: x)
+            rustworkx.graph_dijkstra_shortest_path_lengths(g, 0, lambda x: x)
 
     def test_dijkstra_all_pair_path_lengths(self):
-        lengths = retworkx.graph_all_pairs_dijkstra_path_lengths(
-            self.graph, float
-        )
+        lengths = rustworkx.graph_all_pairs_dijkstra_path_lengths(self.graph, float)
         expected = {
             0: {1: 7.0, 2: 9.0, 3: 11.0, 4: 20.0, 5: 20.0},
             1: {0: 7.0, 2: 10.0, 3: 12.0, 4: 21.0, 5: 15.0},
@@ -124,9 +139,7 @@ class TestDijkstraGraph(unittest.TestCase):
         self.assertEqual(expected, lengths)
 
     def test_dijkstra_all_pair_paths(self):
-        paths = retworkx.graph_all_pairs_dijkstra_shortest_paths(
-            self.graph, float
-        )
+        paths = rustworkx.graph_all_pairs_dijkstra_shortest_paths(self.graph, float)
         expected = {
             0: {
                 1: [0, 1],
@@ -151,9 +164,7 @@ class TestDijkstraGraph(unittest.TestCase):
 
     def test_dijkstra_all_pair_path_lengths_with_node_removal(self):
         self.graph.remove_node(3)
-        lengths = retworkx.graph_all_pairs_dijkstra_path_lengths(
-            self.graph, float
-        )
+        lengths = rustworkx.graph_all_pairs_dijkstra_path_lengths(self.graph, float)
         expected = {
             0: {1: 7.0, 2: 9.0, 4: 26.0, 5: 20.0},
             1: {0: 7.0, 2: 10.0, 4: 21.0, 5: 15.0},
@@ -165,9 +176,7 @@ class TestDijkstraGraph(unittest.TestCase):
 
     def test_dijkstra_all_pair_paths_with_node_removal(self):
         self.graph.remove_node(3)
-        paths = retworkx.graph_all_pairs_dijkstra_shortest_paths(
-            self.graph, float
-        )
+        paths = rustworkx.graph_all_pairs_dijkstra_shortest_paths(self.graph, float)
         expected = {
             0: {1: [0, 1], 2: [0, 2], 4: [0, 2, 5, 4], 5: [0, 2, 5]},
             1: {0: [1, 0], 2: [1, 2], 4: [1, 5, 4], 5: [1, 5]},
@@ -178,31 +187,77 @@ class TestDijkstraGraph(unittest.TestCase):
         self.assertEqual(expected, paths)
 
     def test_dijkstra_all_pair_path_lengths_empty_graph(self):
-        graph = retworkx.PyGraph()
-        self.assertEqual(
-            {}, retworkx.graph_all_pairs_dijkstra_path_lengths(graph, float)
-        )
+        graph = rustworkx.PyGraph()
+        self.assertEqual({}, rustworkx.graph_all_pairs_dijkstra_path_lengths(graph, float))
 
     def test_dijkstra_all_pair_shortest_paths_empty_graph(self):
-        graph = retworkx.PyGraph()
-        self.assertEqual(
-            {}, retworkx.graph_all_pairs_dijkstra_shortest_paths(graph, float)
-        )
+        graph = rustworkx.PyGraph()
+        self.assertEqual({}, rustworkx.graph_all_pairs_dijkstra_shortest_paths(graph, float))
 
     def test_dijkstra_all_pair_path_lengths_graph_no_edges(self):
-        graph = retworkx.PyGraph()
+        graph = rustworkx.PyGraph()
         graph.add_nodes_from(list(range(1000)))
         expected = {x: {} for x in range(1000)}
         self.assertEqual(
             expected,
-            retworkx.graph_all_pairs_dijkstra_path_lengths(graph, float),
+            rustworkx.graph_all_pairs_dijkstra_path_lengths(graph, float),
         )
 
     def test_dijkstra_all_pair_shortest_paths_no_edges(self):
-        graph = retworkx.PyGraph()
+        graph = rustworkx.PyGraph()
         graph.add_nodes_from(list(range(1000)))
         expected = {x: {} for x in range(1000)}
         self.assertEqual(
             expected,
-            retworkx.graph_all_pairs_dijkstra_shortest_paths(graph, float),
+            rustworkx.graph_all_pairs_dijkstra_shortest_paths(graph, float),
         )
+
+    def dijkstra_with_invalid_weights(self):
+        graph = rustworkx.generators.path_graph(2)
+        for invalid_weight in [float("nan"), -1]:
+            for as_undirected in [False, True]:
+                with self.subTest(invalid_weight=invalid_weight, as_undirected=as_undirected):
+                    with self.assertRaises(ValueError):
+                        rustworkx.graph_dijkstra_shortest_paths(
+                            graph,
+                            source=0,
+                            weight_fn=lambda _: invalid_weight,
+                            as_undirected=as_undirected,
+                        )
+
+    def test_dijkstra_path_with_invalid_source(self):
+        with self.assertRaises(IndexError):
+            rustworkx.dijkstra_shortest_paths(self.graph, len(self.graph.node_indices()) + 1)
+
+    def test_dijkstra_path_lengths_with_invalid_source(self):
+        with self.assertRaises(IndexError):
+            rustworkx.dijkstra_shortest_path_lengths(
+                self.graph, len(self.graph.node_indices()) + 1, edge_cost_fn=float
+            )
+
+    def dijkstra_lengths_with_invalid_weights(self):
+        graph = rustworkx.generators.path_graph(2)
+        for invalid_weight in [float("nan"), -1]:
+            with self.subTest(invalid_weight=invalid_weight):
+                with self.assertRaises(ValueError):
+                    rustworkx.graph_dijkstra_shortest_path_lengths(
+                        graph, node=0, edge_cost_fn=lambda _: invalid_weight
+                    )
+
+    def all_pairs_dijkstra_with_invalid_weights(self):
+        graph = rustworkx.generators.path_graph(2)
+        for invalid_weight in [float("nan"), -1]:
+            with self.subTest(invalid_weight=invalid_weight):
+                with self.assertRaises(ValueError):
+                    rustworkx.graph_all_pairs_dijkstra_shortest_paths(
+                        graph, edge_cost_fn=lambda _: invalid_weight
+                    )
+
+    def all_pairs_dijkstra_lenghts_with_invalid_weights(self):
+        graph = rustworkx.generators.path_graph(2)
+        for invalid_weight in [float("nan"), -1]:
+            with self.subTest(invalid_weight=invalid_weight):
+                with self.assertRaises(ValueError):
+                    rustworkx.graph_all_pairs_dijkstra_path_lengths(
+                        graph, edge_cost_fn=lambda _: invalid_weight
+                    )

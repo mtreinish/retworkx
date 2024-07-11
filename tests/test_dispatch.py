@@ -11,7 +11,7 @@
 # under the License.
 
 import unittest
-import retworkx
+import rustworkx
 
 import numpy
 
@@ -23,89 +23,83 @@ class TestDispatchPyGraph(unittest.TestCase):
     def setUp(self):
         super().setUp()
         if self.class_type == "PyGraph":
-            self.graph = retworkx.undirected_gnp_random_graph(10, 0.5, seed=42)
+            self.graph = rustworkx.undirected_gnp_random_graph(10, 0.5, seed=42)
         else:
-            self.graph = retworkx.directed_gnp_random_graph(10, 0.5, seed=42)
+            self.graph = rustworkx.directed_gnp_random_graph(10, 0.5, seed=42)
 
     def test_distance_matrix(self):
-        res = retworkx.distance_matrix(self.graph)
+        res = rustworkx.distance_matrix(self.graph)
         self.assertIsInstance(res, numpy.ndarray)
 
     def test_distance_matrix_as_undirected(self):
         if self.class_type == "PyGraph":
             with self.assertRaises(TypeError):
-                retworkx.distance_matrix(self.graph, as_undirected=True)
+                rustworkx.distance_matrix(self.graph, as_undirected=True)
         else:
-            res = retworkx.distance_matrix(self.graph, as_undirected=True)
+            res = rustworkx.distance_matrix(self.graph, as_undirected=True)
             self.assertIsInstance(res, numpy.ndarray)
 
     def test_adjacency_matrix(self):
-        res = retworkx.adjacency_matrix(self.graph)
+        res = rustworkx.adjacency_matrix(self.graph)
         self.assertIsInstance(res, numpy.ndarray)
 
     def test_all_simple_paths(self):
-        res = retworkx.all_simple_paths(self.graph, 0, 1)
+        res = rustworkx.all_simple_paths(self.graph, 0, 1)
         self.assertIsInstance(res, list)
 
     def test_floyd_warshall(self):
-        res = retworkx.floyd_warshall(self.graph)
-        self.assertIsInstance(res, retworkx.AllPairsPathLengthMapping)
+        res = rustworkx.floyd_warshall(self.graph)
+        self.assertIsInstance(res, rustworkx.AllPairsPathLengthMapping)
 
     def test_floyd_warshall_numpy(self):
-        res = retworkx.floyd_warshall_numpy(self.graph)
+        res = rustworkx.floyd_warshall_numpy(self.graph)
         self.assertIsInstance(res, numpy.ndarray)
 
         if self.class_type == "PyGraph":
-            expected_res = retworkx.graph_floyd_warshall_numpy(self.graph)
+            expected_res = rustworkx.graph_floyd_warshall_numpy(self.graph)
         else:
-            expected_res = retworkx.digraph_floyd_warshall_numpy(self.graph)
+            expected_res = rustworkx.digraph_floyd_warshall_numpy(self.graph)
 
         self.assertTrue(numpy.array_equal(expected_res, res))
 
     def test_astar_shortest_path(self):
-        res = retworkx.astar_shortest_path(
-            self.graph, 0, lambda _: True, lambda _: 1, lambda _: 1
-        )
+        res = rustworkx.astar_shortest_path(self.graph, 0, lambda _: True, lambda _: 1, lambda _: 1)
         self.assertIsInstance(list(res), list)
 
     def test_dijkstra_shortest_paths(self):
-        res = retworkx.dijkstra_shortest_paths(self.graph, 0)
-        self.assertIsInstance(res, retworkx.PathMapping)
+        res = rustworkx.dijkstra_shortest_paths(self.graph, 0)
+        self.assertIsInstance(res, rustworkx.PathMapping)
 
     def test_dijkstra_shortest_path_lengths(self):
-        res = retworkx.dijkstra_shortest_path_lengths(
-            self.graph, 0, lambda _: 1
-        )
-        self.assertIsInstance(res, retworkx.PathLengthMapping)
+        res = rustworkx.dijkstra_shortest_path_lengths(self.graph, 0, lambda _: 1)
+        self.assertIsInstance(res, rustworkx.PathLengthMapping)
 
     def test_k_shortest_path_lengths(self):
-        res = retworkx.k_shortest_path_lengths(self.graph, 0, 2, lambda _: 1)
-        self.assertIsInstance(res, retworkx.PathLengthMapping)
+        res = rustworkx.k_shortest_path_lengths(self.graph, 0, 2, lambda _: 1)
+        self.assertIsInstance(res, rustworkx.PathLengthMapping)
 
     def test_dfs_edges(self):
-        res = retworkx.dfs_edges(self.graph, 0)
+        res = rustworkx.dfs_edges(self.graph, 0)
         self.assertIsInstance(list(res), list)
 
     def test_all_pairs_dijkstra_shortest_paths(self):
-        res = retworkx.all_pairs_dijkstra_shortest_paths(
-            self.graph, lambda _: 1
-        )
-        self.assertIsInstance(res, retworkx.AllPairsPathMapping)
+        res = rustworkx.all_pairs_dijkstra_shortest_paths(self.graph, lambda _: 1)
+        self.assertIsInstance(res, rustworkx.AllPairsPathMapping)
 
     def test_all_pairs_dijkstra_path_lengthss(self):
-        res = retworkx.all_pairs_dijkstra_path_lengths(self.graph, lambda _: 1)
-        self.assertIsInstance(res, retworkx.AllPairsPathLengthMapping)
+        res = rustworkx.all_pairs_dijkstra_path_lengths(self.graph, lambda _: 1)
+        self.assertIsInstance(res, rustworkx.AllPairsPathLengthMapping)
 
     def test_is_isomorphic_nodes_incompatible_raises(self):
         with self.assertRaises(TypeError):
             if self.class_type == "PyGraph":
-                retworkx.is_isomorphic(self.graph, retworkx.PyDiGraph())
+                rustworkx.is_isomorphic(self.graph, rustworkx.PyDiGraph())
             else:
-                retworkx.is_isomorphic(self.graph, retworkx.PyGraph())
+                rustworkx.is_isomorphic(self.graph, rustworkx.PyGraph())
 
     def test_betweenness_centrality(self):
-        res = retworkx.betweenness_centrality(self.graph)
-        self.assertIsInstance(res, retworkx.CentralityMapping)
+        res = rustworkx.betweenness_centrality(self.graph)
+        self.assertIsInstance(res, rustworkx.CentralityMapping)
 
 
 class TestDispatchPyDiGraph(TestDispatchPyGraph):

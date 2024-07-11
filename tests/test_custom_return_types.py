@@ -14,72 +14,69 @@ import copy
 import pickle
 import unittest
 
-import retworkx
+import rustworkx
+import numpy as np
 
 
 class TestBFSSuccessorsComparisons(unittest.TestCase):
     def setUp(self):
-        self.dag = retworkx.PyDAG()
-        node_a = self.dag.add_node("a")
-        self.dag.add_child(node_a, "b", "Edgy")
+        self.dag = rustworkx.PyDAG()
+        self.node_a = self.dag.add_node("a")
+        self.node_b = self.dag.add_child(self.node_a, "b", "Edgy")
 
     def test__eq__match(self):
-        self.assertTrue(retworkx.bfs_successors(self.dag, 0) == [("a", ["b"])])
+        self.assertTrue(rustworkx.bfs_successors(self.dag, 0) == [("a", ["b"])])
 
     def test__eq__not_match(self):
-        self.assertFalse(retworkx.bfs_successors(self.dag, 0) == [("b", ["c"])])
+        self.assertFalse(rustworkx.bfs_successors(self.dag, 0) == [("b", ["c"])])
 
     def test_eq_not_match_inner(self):
-        self.assertFalse(retworkx.bfs_successors(self.dag, 0) == [("a", ["c"])])
+        self.assertFalse(rustworkx.bfs_successors(self.dag, 0) == [("a", ["c"])])
 
     def test__eq__different_length(self):
-        self.assertFalse(
-            retworkx.bfs_successors(self.dag, 0) == [("a", ["b"]), ("b", ["c"])]
-        )
+        self.assertFalse(rustworkx.bfs_successors(self.dag, 0) == [("a", ["b"]), ("b", ["c"])])
 
     def test__eq__invalid_type(self):
         with self.assertRaises(TypeError):
-            retworkx.bfs_successors(self.dag, 0) == ["a"]
+            rustworkx.bfs_successors(self.dag, 0) == ["a"]
 
     def test__ne__match(self):
-        self.assertFalse(retworkx.bfs_successors(self.dag, 0) != [("a", ["b"])])
+        self.assertFalse(rustworkx.bfs_successors(self.dag, 0) != [("a", ["b"])])
 
     def test__ne__not_match(self):
-        self.assertTrue(retworkx.bfs_successors(self.dag, 0) != [("b", ["c"])])
+        self.assertTrue(rustworkx.bfs_successors(self.dag, 0) != [("b", ["c"])])
 
     def test_ne_not_match_inner(self):
-        self.assertTrue(retworkx.bfs_successors(self.dag, 0) != [("a", ["c"])])
+        self.assertTrue(rustworkx.bfs_successors(self.dag, 0) != [("a", ["c"])])
 
     def test__ne__different_length(self):
-        self.assertTrue(
-            retworkx.bfs_successors(self.dag, 0) != [("a", ["b"]), ("b", ["c"])]
-        )
+        self.assertTrue(rustworkx.bfs_successors(self.dag, 0) != [("a", ["b"]), ("b", ["c"])])
 
     def test__ne__invalid_type(self):
         with self.assertRaises(TypeError):
-            retworkx.bfs_successors(self.dag, 0) != ["a"]
+            rustworkx.bfs_successors(self.dag, 0) != ["a"]
 
     def test__gt__not_implemented(self):
         with self.assertRaises(NotImplementedError):
-            retworkx.bfs_successors(self.dag, 0) > [("b", ["c"])]
+            rustworkx.bfs_successors(self.dag, 0) > [("b", ["c"])]
 
     def test_deepcopy(self):
-        bfs = retworkx.bfs_successors(self.dag, 0)
+        bfs = rustworkx.bfs_successors(self.dag, 0)
         bfs_copy = copy.deepcopy(bfs)
         self.assertEqual(bfs, bfs_copy)
 
     def test_pickle(self):
-        bfs = retworkx.bfs_successors(self.dag, 0)
+        bfs = rustworkx.bfs_successors(self.dag, 0)
         bfs_pickle = pickle.dumps(bfs)
         bfs_copy = pickle.loads(bfs_pickle)
         self.assertEqual(bfs, bfs_copy)
 
     def test_str(self):
-        res = retworkx.bfs_successors(self.dag, 0)
+        res = rustworkx.bfs_successors(self.dag, 0)
         self.assertEqual("BFSSuccessors[(a, [b])]", str(res))
 
     def test_hash(self):
-        res = retworkx.bfs_successors(self.dag, 0)
+        res = rustworkx.bfs_successors(self.dag, 0)
         hash_res = hash(res)
         self.assertIsInstance(hash_res, int)
         # Assert hash is stable
@@ -87,14 +84,31 @@ class TestBFSSuccessorsComparisons(unittest.TestCase):
 
     def test_hash_invalid_type(self):
         self.dag.add_child(0, [1, 2, 3], "edgy")
-        res = retworkx.bfs_successors(self.dag, 0)
+        res = rustworkx.bfs_successors(self.dag, 0)
         with self.assertRaises(TypeError):
             hash(res)
+
+    def test_slices(self):
+        self.dag.add_child(self.node_a, "c", "New edge")
+        self.dag.add_child(self.node_b, "d", "New edge to d")
+        successors = rustworkx.bfs_successors(self.dag, 0)
+        slice_return = successors[0:3:2]
+        self.assertEqual([("a", ["c", "b"])], slice_return)
+
+    def test_iter(self):
+        self.dag.add_child(self.node_a, "c", "edge")
+        successors = rustworkx.bfs_successors(self.dag, 0)
+        self.assertEqual(list(successors), list(iter(successors)))
+
+    def test_reversed(self):
+        self.dag.add_child(self.node_a, "c", "edge")
+        successors = rustworkx.bfs_successors(self.dag, 0)
+        self.assertEqual(list(successors)[::-1], list(reversed(successors)))
 
 
 class TestNodeIndicesComparisons(unittest.TestCase):
     def setUp(self):
-        self.dag = retworkx.PyDAG()
+        self.dag = rustworkx.PyDAG()
         node_a = self.dag.add_node("a")
         self.dag.add_child(node_a, "b", "Edgy")
 
@@ -150,134 +164,156 @@ class TestNodeIndicesComparisons(unittest.TestCase):
         # Assert hash is stable
         self.assertEqual(hash_res, hash(res))
 
+    def test_slices(self):
+        self.dag.add_node("new")
+        self.dag.add_node("fun")
+        nodes = self.dag.node_indices()
+        slice_return = nodes[0:3:2]
+        self.assertEqual([0, 2], slice_return)
+        self.assertEqual(nodes[0:-1], [0, 1, 2])
+
+    def test_slices_negatives(self):
+        graph = rustworkx.PyGraph()
+        graph.add_nodes_from(range(5))
+        indices = graph.node_indices()
+        slice_return = indices[-1:-3:-1]
+        self.assertEqual([4, 3], slice_return)
+        slice_return = indices[3:1:-2]
+        self.assertEqual([3], slice_return)
+        slice_return = indices[-3:-1]
+        self.assertEqual([2, 3], slice_return)
+        self.assertEqual([], indices[-1:-2])
+
+    def test_iter(self):
+        indices = self.dag.node_indices()
+        self.assertEqual(list(indices), list(iter(indices)))
+
+    def test_reversed(self):
+        indices = self.dag.node_indices()
+        reversed_slice = indices[::-1]
+        reversed_elems = list(reversed(indices))
+        self.assertEqual(reversed_slice, reversed_elems)
+
+    def test_numpy_conversion(self):
+        res = self.dag.node_indexes()
+        np.testing.assert_array_equal(np.asarray(res, dtype=np.uintp), np.array([0, 1]))
+
+    def test_numpy_conversion_copy_false(self):
+        res = self.dag.node_indices()
+        with self.assertRaises(ValueError):
+            res.__array__(copy=False)
+
+    def test_numpy_conversion_dtype_complex(self):
+        res = self.dag.node_indices()
+        array = res.__array__(dtype=complex)
+        self.assertEqual(np.dtype(complex), array.dtype)
+
 
 class TestNodesCountMapping(unittest.TestCase):
     def setUp(self):
-        self.dag = retworkx.PyDAG()
+        self.dag = rustworkx.PyDAG()
         node_a = self.dag.add_node("a")
         self.dag.add_child(node_a, "b", "Edgy")
 
     def test__eq__match(self):
-        self.assertTrue(
-            retworkx.num_shortest_paths_unweighted(self.dag, 0) == {1: 1}
-        )
+        self.assertTrue(rustworkx.num_shortest_paths_unweighted(self.dag, 0) == {1: 1})
 
     def test__eq__not_match_keys(self):
-        self.assertFalse(
-            retworkx.num_shortest_paths_unweighted(self.dag, 0) == {2: 1}
-        )
+        self.assertFalse(rustworkx.num_shortest_paths_unweighted(self.dag, 0) == {2: 1})
 
     def test__eq__not_match_values(self):
-        self.assertFalse(
-            retworkx.num_shortest_paths_unweighted(self.dag, 0) == {1: 2}
-        )
+        self.assertFalse(rustworkx.num_shortest_paths_unweighted(self.dag, 0) == {1: 2})
 
     def test__eq__different_length(self):
-        self.assertFalse(
-            retworkx.num_shortest_paths_unweighted(self.dag, 0) == {1: 1, 2: 2}
-        )
+        self.assertFalse(rustworkx.num_shortest_paths_unweighted(self.dag, 0) == {1: 1, 2: 2})
 
     def test_eq__same_type(self):
         self.assertEqual(
-            retworkx.num_shortest_paths_unweighted(self.dag, 0),
-            retworkx.num_shortest_paths_unweighted(self.dag, 0),
+            rustworkx.num_shortest_paths_unweighted(self.dag, 0),
+            rustworkx.num_shortest_paths_unweighted(self.dag, 0),
         )
 
     def test__eq__invalid_type(self):
-        self.assertFalse(
-            retworkx.num_shortest_paths_unweighted(self.dag, 0) == ["a", None]
-        )
+        self.assertFalse(rustworkx.num_shortest_paths_unweighted(self.dag, 0) == ["a", None])
 
     def test__eq__invalid_inner_type(self):
-        self.assertFalse(
-            retworkx.num_shortest_paths_unweighted(self.dag, 0) == {0: "a"}
-        )
+        self.assertFalse(rustworkx.num_shortest_paths_unweighted(self.dag, 0) == {0: "a"})
 
     def test__ne__match(self):
-        self.assertFalse(
-            retworkx.num_shortest_paths_unweighted(self.dag, 0) != {1: 1}
-        )
+        self.assertFalse(rustworkx.num_shortest_paths_unweighted(self.dag, 0) != {1: 1})
 
     def test__ne__not_match(self):
-        self.assertTrue(
-            retworkx.num_shortest_paths_unweighted(self.dag, 0) != {2: 1}
-        )
+        self.assertTrue(rustworkx.num_shortest_paths_unweighted(self.dag, 0) != {2: 1})
 
     def test__ne__not_match_values(self):
-        self.assertTrue(
-            retworkx.num_shortest_paths_unweighted(self.dag, 0) != {1: 2}
-        )
+        self.assertTrue(rustworkx.num_shortest_paths_unweighted(self.dag, 0) != {1: 2})
 
     def test__ne__different_length(self):
-        self.assertTrue(
-            retworkx.num_shortest_paths_unweighted(self.dag, 0) != {1: 1, 2: 2}
-        )
+        self.assertTrue(rustworkx.num_shortest_paths_unweighted(self.dag, 0) != {1: 1, 2: 2})
 
     def test__ne__invalid_type(self):
-        self.assertTrue(
-            retworkx.num_shortest_paths_unweighted(self.dag, 0) != ["a", None]
-        )
+        self.assertTrue(rustworkx.num_shortest_paths_unweighted(self.dag, 0) != ["a", None])
 
     def test__gt__not_implemented(self):
         with self.assertRaises(NotImplementedError):
-            retworkx.num_shortest_paths_unweighted(self.dag, 0) > {1: 1}
+            rustworkx.num_shortest_paths_unweighted(self.dag, 0) > {1: 1}
 
     def test_deepcopy(self):
-        paths = retworkx.num_shortest_paths_unweighted(self.dag, 0)
+        paths = rustworkx.num_shortest_paths_unweighted(self.dag, 0)
         paths_copy = copy.deepcopy(paths)
         self.assertEqual(paths, paths_copy)
 
     def test_pickle(self):
-        paths = retworkx.num_shortest_paths_unweighted(self.dag, 0)
+        paths = rustworkx.num_shortest_paths_unweighted(self.dag, 0)
         paths_pickle = pickle.dumps(paths)
         paths_copy = pickle.loads(paths_pickle)
         self.assertEqual(paths, paths_copy)
 
     def test_str(self):
-        res = retworkx.num_shortest_paths_unweighted(self.dag, 0)
+        res = rustworkx.num_shortest_paths_unweighted(self.dag, 0)
         self.assertEqual("NodesCountMapping{1: 1}", str(res))
 
     def test_hash(self):
-        res = retworkx.num_shortest_paths_unweighted(self.dag, 0)
+        res = rustworkx.num_shortest_paths_unweighted(self.dag, 0)
         hash_res = hash(res)
         self.assertIsInstance(hash_res, int)
         # Assert hash is stable
         self.assertEqual(hash_res, hash(res))
 
     def test_index_error(self):
-        res = retworkx.num_shortest_paths_unweighted(self.dag, 0)
+        res = rustworkx.num_shortest_paths_unweighted(self.dag, 0)
         with self.assertRaises(IndexError):
             res[42]
 
     def test_keys(self):
-        keys = retworkx.num_shortest_paths_unweighted(self.dag, 0).keys()
+        keys = rustworkx.num_shortest_paths_unweighted(self.dag, 0).keys()
         self.assertEqual([1], list(keys))
 
     def test_values(self):
-        values = retworkx.num_shortest_paths_unweighted(self.dag, 0).values()
+        values = rustworkx.num_shortest_paths_unweighted(self.dag, 0).values()
         self.assertEqual([1], list(values))
 
     def test_items(self):
-        items = retworkx.num_shortest_paths_unweighted(self.dag, 0).items()
+        items = rustworkx.num_shortest_paths_unweighted(self.dag, 0).items()
         self.assertEqual([(1, 1)], list(items))
 
     def test_iter(self):
-        mapping_iter = iter(retworkx.num_shortest_paths_unweighted(self.dag, 0))
+        mapping_iter = iter(rustworkx.num_shortest_paths_unweighted(self.dag, 0))
         output = list(mapping_iter)
         self.assertEqual(output, [1])
 
     def test_contains(self):
-        res = retworkx.num_shortest_paths_unweighted(self.dag, 0)
+        res = rustworkx.num_shortest_paths_unweighted(self.dag, 0)
         self.assertIn(1, res)
 
     def test_not_contains(self):
-        res = retworkx.num_shortest_paths_unweighted(self.dag, 0)
+        res = rustworkx.num_shortest_paths_unweighted(self.dag, 0)
         self.assertNotIn(0, res)
 
 
 class TestEdgeIndicesComparisons(unittest.TestCase):
     def setUp(self):
-        self.dag = retworkx.PyDiGraph()
+        self.dag = rustworkx.PyDiGraph()
         node_a = self.dag.add_node("a")
         node_b = self.dag.add_child(node_a, "b", "Edgy")
         self.dag.add_child(node_b, "c", "Super Edgy")
@@ -334,10 +370,24 @@ class TestEdgeIndicesComparisons(unittest.TestCase):
         # Assert hash is stable
         self.assertEqual(hash_res, hash(res))
 
+    def test_slices(self):
+        self.dag.add_edge(0, 1, None)
+        edges = self.dag.edge_indices()
+        slice_return = edges[0:-1]
+        self.assertEqual([0, 1], slice_return)
+
+    def test_iter(self):
+        indices = self.dag.edge_indices()
+        self.assertEqual(list(indices), list(iter(indices)))
+
+    def test_reversed(self):
+        indices = self.dag.edge_indices()
+        self.assertEqual(list(indices)[::-1], list(reversed(indices)))
+
 
 class TestEdgeListComparisons(unittest.TestCase):
     def setUp(self):
-        self.dag = retworkx.PyDAG()
+        self.dag = rustworkx.PyDAG()
         node_a = self.dag.add_node("a")
         self.dag.add_child(node_a, "b", "Edgy")
 
@@ -391,10 +441,34 @@ class TestEdgeListComparisons(unittest.TestCase):
         # Assert hash is stable
         self.assertEqual(hash_res, hash(res))
 
+    def test_slice(self):
+        self.dag.add_edge(0, 1, None)
+        self.dag.add_edge(0, 1, None)
+        edges = self.dag.edge_list()
+        slice_return = edges[0:3:2]
+        self.assertEqual([(0, 1), (0, 1)], slice_return)
+
+    @staticmethod
+    def test_numpy_conversion():
+        g = rustworkx.generators.directed_star_graph(5)
+        res = g.edge_list()
+
+        np.testing.assert_array_equal(
+            np.asarray(res, dtype=np.uintp), np.array([[0, 1], [0, 2], [0, 3], [0, 4]])
+        )
+
+    def test_iter(self):
+        edges = self.dag.edge_list()
+        self.assertEqual(list(edges), list(iter(edges)))
+
+    def test_reversed(self):
+        edges = self.dag.edge_list()
+        self.assertEqual(list(edges)[::-1], list(reversed(edges)))
+
 
 class TestWeightedEdgeListComparisons(unittest.TestCase):
     def setUp(self):
-        self.dag = retworkx.PyDAG()
+        self.dag = rustworkx.PyDAG()
         node_a = self.dag.add_node("a")
         self.dag.add_child(node_a, "b", "Edgy")
 
@@ -405,10 +479,7 @@ class TestWeightedEdgeListComparisons(unittest.TestCase):
         self.assertFalse(self.dag.weighted_edge_list() == [(1, 2, None)])
 
     def test__eq__different_length(self):
-        self.assertFalse(
-            self.dag.weighted_edge_list()
-            == [(0, 1, "Edgy"), (2, 3, "Not Edgy")]
-        )
+        self.assertFalse(self.dag.weighted_edge_list() == [(0, 1, "Edgy"), (2, 3, "Not Edgy")])
 
     def test__eq__invalid_type(self):
         self.assertFalse(self.dag.weighted_edge_list() == ["a", None])
@@ -457,405 +528,350 @@ class TestWeightedEdgeListComparisons(unittest.TestCase):
         with self.assertRaises(TypeError):
             hash(res)
 
+    def test_slice(self):
+        self.dag.add_edge(0, 1, None)
+        self.dag.add_edge(0, 1, None)
+        edges = self.dag.weighted_edge_list()
+        slice_return = edges[0:3:2]
+        self.assertEqual([(0, 1, "Edgy"), (0, 1, None)], slice_return)
+
+    def test_numpy_conversion(self):
+        np.testing.assert_array_equal(
+            np.asarray(self.dag.weighted_edge_list()), np.array([(0, 1, "Edgy")], dtype=object)
+        )
+
+    def test_iter(self):
+        edges = self.dag.weighted_edge_list()
+        self.assertEqual(list(edges), list(iter(edges)))
+
+    def test_reversed(self):
+        edges = self.dag.weighted_edge_list()
+        self.assertEqual(list(edges)[::-1], list(reversed(edges)))
+
 
 class TestPathMapping(unittest.TestCase):
     def setUp(self):
-        self.dag = retworkx.PyDAG()
+        self.dag = rustworkx.PyDAG()
         node_a = self.dag.add_node("a")
         self.dag.add_child(node_a, "b", "Edgy")
 
     def test__eq__match(self):
-        self.assertTrue(
-            retworkx.dijkstra_shortest_paths(self.dag, 0) == {1: [0, 1]}
-        )
+        self.assertTrue(rustworkx.dijkstra_shortest_paths(self.dag, 0) == {1: [0, 1]})
 
     def test__eq__not_match_keys(self):
-        self.assertFalse(
-            retworkx.dijkstra_shortest_paths(self.dag, 0) == {2: [0, 1]}
-        )
+        self.assertFalse(rustworkx.dijkstra_shortest_paths(self.dag, 0) == {2: [0, 1]})
 
     def test__eq__not_match_values(self):
-        self.assertFalse(
-            retworkx.dijkstra_shortest_paths(self.dag, 0) == {1: [0, 2]}
-        )
+        self.assertFalse(rustworkx.dijkstra_shortest_paths(self.dag, 0) == {1: [0, 2]})
 
     def test__eq__different_length(self):
-        self.assertFalse(
-            retworkx.dijkstra_shortest_paths(self.dag, 0)
-            == {1: [0, 1], 2: [0, 2]}
-        )
+        self.assertFalse(rustworkx.dijkstra_shortest_paths(self.dag, 0) == {1: [0, 1], 2: [0, 2]})
 
     def test_eq__same_type(self):
         self.assertEqual(
-            retworkx.dijkstra_shortest_paths(self.dag, 0),
-            retworkx.dijkstra_shortest_paths(self.dag, 0),
+            rustworkx.dijkstra_shortest_paths(self.dag, 0),
+            rustworkx.dijkstra_shortest_paths(self.dag, 0),
         )
 
     def test__eq__invalid_type(self):
-        self.assertFalse(
-            retworkx.dijkstra_shortest_paths(self.dag, 0) == ["a", None]
-        )
+        self.assertFalse(rustworkx.dijkstra_shortest_paths(self.dag, 0) == ["a", None])
 
     def test__eq__invalid_inner_type(self):
-        self.assertFalse(
-            retworkx.dijkstra_shortest_paths(self.dag, 0) == {0: {"a": None}}
-        )
+        self.assertFalse(rustworkx.dijkstra_shortest_paths(self.dag, 0) == {0: {"a": None}})
 
     def test__ne__match(self):
-        self.assertFalse(
-            retworkx.dijkstra_shortest_paths(self.dag, 0) != {1: [0, 1]}
-        )
+        self.assertFalse(rustworkx.dijkstra_shortest_paths(self.dag, 0) != {1: [0, 1]})
 
     def test__ne__not_match(self):
-        self.assertTrue(
-            retworkx.dijkstra_shortest_paths(self.dag, 0) != {2: [0, 1]}
-        )
+        self.assertTrue(rustworkx.dijkstra_shortest_paths(self.dag, 0) != {2: [0, 1]})
 
     def test__ne__not_match_values(self):
-        self.assertTrue(
-            retworkx.dijkstra_shortest_paths(self.dag, 0) != {1: [0, 2]}
-        )
+        self.assertTrue(rustworkx.dijkstra_shortest_paths(self.dag, 0) != {1: [0, 2]})
 
     def test__ne__different_length(self):
-        self.assertTrue(
-            retworkx.dijkstra_shortest_paths(self.dag, 0)
-            != {1: [0, 1], 2: [0, 2]}
-        )
+        self.assertTrue(rustworkx.dijkstra_shortest_paths(self.dag, 0) != {1: [0, 1], 2: [0, 2]})
 
     def test__ne__invalid_type(self):
-        self.assertTrue(
-            retworkx.dijkstra_shortest_paths(self.dag, 0) != ["a", None]
-        )
+        self.assertTrue(rustworkx.dijkstra_shortest_paths(self.dag, 0) != ["a", None])
 
     def test__gt__not_implemented(self):
         with self.assertRaises(NotImplementedError):
-            retworkx.dijkstra_shortest_paths(self.dag, 0) > {1: [0, 2]}
+            rustworkx.dijkstra_shortest_paths(self.dag, 0) > {1: [0, 2]}
 
     def test_deepcopy(self):
-        paths = retworkx.dijkstra_shortest_paths(self.dag, 0)
+        paths = rustworkx.dijkstra_shortest_paths(self.dag, 0)
         paths_copy = copy.deepcopy(paths)
         self.assertEqual(paths, paths_copy)
 
     def test_pickle(self):
-        paths = retworkx.dijkstra_shortest_paths(self.dag, 0)
+        paths = rustworkx.dijkstra_shortest_paths(self.dag, 0)
         paths_pickle = pickle.dumps(paths)
         paths_copy = pickle.loads(paths_pickle)
         self.assertEqual(paths, paths_copy)
 
     def test_str(self):
-        res = retworkx.dijkstra_shortest_paths(self.dag, 0)
+        res = rustworkx.dijkstra_shortest_paths(self.dag, 0)
         self.assertEqual("PathMapping{1: [0, 1]}", str(res))
 
     def test_hash(self):
-        res = retworkx.dijkstra_shortest_paths(self.dag, 0)
+        res = rustworkx.dijkstra_shortest_paths(self.dag, 0)
         hash_res = hash(res)
         self.assertIsInstance(hash_res, int)
         # Assert hash is stable
         self.assertEqual(hash_res, hash(res))
 
     def test_index_error(self):
-        res = retworkx.dijkstra_shortest_paths(self.dag, 0)
+        res = rustworkx.dijkstra_shortest_paths(self.dag, 0)
         with self.assertRaises(IndexError):
             res[42]
 
     def test_keys(self):
-        keys = retworkx.dijkstra_shortest_paths(self.dag, 0).keys()
+        keys = rustworkx.dijkstra_shortest_paths(self.dag, 0).keys()
         self.assertEqual([1], list(keys))
 
     def test_values(self):
-        values = retworkx.dijkstra_shortest_paths(self.dag, 0).values()
+        values = rustworkx.dijkstra_shortest_paths(self.dag, 0).values()
         self.assertEqual([[0, 1]], list(values))
 
     def test_items(self):
-        items = retworkx.dijkstra_shortest_paths(self.dag, 0).items()
+        items = rustworkx.dijkstra_shortest_paths(self.dag, 0).items()
         self.assertEqual([(1, [0, 1])], list(items))
 
     def test_iter(self):
-        mapping_iter = iter(retworkx.dijkstra_shortest_paths(self.dag, 0))
+        mapping_iter = iter(rustworkx.dijkstra_shortest_paths(self.dag, 0))
         output = list(mapping_iter)
         self.assertEqual(output, [1])
 
     def test_contains(self):
-        res = retworkx.dijkstra_shortest_paths(self.dag, 0)
+        res = rustworkx.dijkstra_shortest_paths(self.dag, 0)
         self.assertIn(1, res)
 
     def test_not_contains(self):
-        res = retworkx.dijkstra_shortest_paths(self.dag, 0)
+        res = rustworkx.dijkstra_shortest_paths(self.dag, 0)
         self.assertNotIn(0, res)
 
 
 class TestPathLengthMapping(unittest.TestCase):
     def setUp(self):
-        self.dag = retworkx.PyDAG()
+        self.dag = rustworkx.PyDAG()
         node_a = self.dag.add_node("a")
         self.dag.add_child(node_a, "b", "Edgy")
         self.fn = lambda _: 1.0
 
     def test__eq__match(self):
-        self.assertTrue(
-            retworkx.dijkstra_shortest_path_lengths(self.dag, 0, self.fn)
-            == {1: 1.0}
-        )
+        self.assertTrue(rustworkx.dijkstra_shortest_path_lengths(self.dag, 0, self.fn) == {1: 1.0})
 
     def test__eq__not_match_keys(self):
-        self.assertFalse(
-            retworkx.dijkstra_shortest_path_lengths(self.dag, 0, self.fn)
-            == {2: 1.0}
-        )
+        self.assertFalse(rustworkx.dijkstra_shortest_path_lengths(self.dag, 0, self.fn) == {2: 1.0})
 
     def test__eq__not_match_values(self):
-        self.assertFalse(
-            retworkx.dijkstra_shortest_path_lengths(self.dag, 0, self.fn)
-            == {1: 2.0}
-        )
+        self.assertFalse(rustworkx.dijkstra_shortest_path_lengths(self.dag, 0, self.fn) == {1: 2.0})
 
     def test__eq__different_length(self):
         self.assertFalse(
-            retworkx.dijkstra_shortest_path_lengths(self.dag, 0, self.fn)
-            == {1: 1.0, 2: 2.0}
+            rustworkx.dijkstra_shortest_path_lengths(self.dag, 0, self.fn) == {1: 1.0, 2: 2.0}
         )
 
     def test_eq__same_type(self):
         self.assertEqual(
-            retworkx.dijkstra_shortest_path_lengths(self.dag, 0, self.fn),
-            retworkx.dijkstra_shortest_path_lengths(self.dag, 0, self.fn),
+            rustworkx.dijkstra_shortest_path_lengths(self.dag, 0, self.fn),
+            rustworkx.dijkstra_shortest_path_lengths(self.dag, 0, self.fn),
         )
 
     def test__eq__invalid_type(self):
         self.assertFalse(
-            retworkx.dijkstra_shortest_path_lengths(self.dag, 0, self.fn)
-            == ["a", None]
+            rustworkx.dijkstra_shortest_path_lengths(self.dag, 0, self.fn) == ["a", None]
         )
 
     def test__eq__invalid_inner_type(self):
-        self.assertFalse(
-            retworkx.dijkstra_shortest_path_lengths(self.dag, 0, self.fn)
-            == {0: "a"}
-        )
+        self.assertFalse(rustworkx.dijkstra_shortest_path_lengths(self.dag, 0, self.fn) == {0: "a"})
 
     def test__ne__match(self):
-        self.assertFalse(
-            retworkx.dijkstra_shortest_path_lengths(self.dag, 0, self.fn)
-            != {1: 1.0}
-        )
+        self.assertFalse(rustworkx.dijkstra_shortest_path_lengths(self.dag, 0, self.fn) != {1: 1.0})
 
     def test__ne__not_match(self):
-        self.assertTrue(
-            retworkx.dijkstra_shortest_path_lengths(self.dag, 0, self.fn)
-            != {2: 1.0}
-        )
+        self.assertTrue(rustworkx.dijkstra_shortest_path_lengths(self.dag, 0, self.fn) != {2: 1.0})
 
     def test__ne__not_match_values(self):
-        self.assertTrue(
-            retworkx.dijkstra_shortest_path_lengths(self.dag, 0, self.fn)
-            != {1: 2.0}
-        )
+        self.assertTrue(rustworkx.dijkstra_shortest_path_lengths(self.dag, 0, self.fn) != {1: 2.0})
 
     def test__ne__different_length(self):
         self.assertTrue(
-            retworkx.dijkstra_shortest_path_lengths(self.dag, 0, self.fn)
-            != {1: 1.0, 2: 2.0}
+            rustworkx.dijkstra_shortest_path_lengths(self.dag, 0, self.fn) != {1: 1.0, 2: 2.0}
         )
 
     def test__ne__invalid_type(self):
         self.assertTrue(
-            retworkx.dijkstra_shortest_path_lengths(self.dag, 0, self.fn)
-            != ["a", None]
+            rustworkx.dijkstra_shortest_path_lengths(self.dag, 0, self.fn) != ["a", None]
         )
 
     def test__gt__not_implemented(self):
         with self.assertRaises(NotImplementedError):
-            retworkx.dijkstra_shortest_path_lengths(self.dag, 0, self.fn) > {
-                1: 1.0
-            }
+            rustworkx.dijkstra_shortest_path_lengths(self.dag, 0, self.fn) > {1: 1.0}
 
     def test_deepcopy(self):
-        paths = retworkx.dijkstra_shortest_path_lengths(self.dag, 0, self.fn)
+        paths = rustworkx.dijkstra_shortest_path_lengths(self.dag, 0, self.fn)
         paths_copy = copy.deepcopy(paths)
         self.assertEqual(paths, paths_copy)
 
     def test_pickle(self):
-        paths = retworkx.dijkstra_shortest_path_lengths(self.dag, 0, self.fn)
+        paths = rustworkx.dijkstra_shortest_path_lengths(self.dag, 0, self.fn)
         paths_pickle = pickle.dumps(paths)
         paths_copy = pickle.loads(paths_pickle)
         self.assertEqual(paths, paths_copy)
 
     def test_str(self):
-        res = retworkx.dijkstra_shortest_path_lengths(
-            self.dag, 0, lambda _: 3.14
-        )
+        res = rustworkx.dijkstra_shortest_path_lengths(self.dag, 0, lambda _: 3.14)
         self.assertEqual("PathLengthMapping{1: 3.14}", str(res))
 
     def test_hash(self):
-        res = retworkx.dijkstra_shortest_path_lengths(self.dag, 0, self.fn)
+        res = rustworkx.dijkstra_shortest_path_lengths(self.dag, 0, self.fn)
         hash_res = hash(res)
         self.assertIsInstance(hash_res, int)
         # Assert hash is stable
         self.assertEqual(hash_res, hash(res))
 
     def test_index_error(self):
-        res = retworkx.dijkstra_shortest_path_lengths(self.dag, 0, self.fn)
+        res = rustworkx.dijkstra_shortest_path_lengths(self.dag, 0, self.fn)
         with self.assertRaises(IndexError):
             res[42]
 
     def test_keys(self):
-        keys = retworkx.dijkstra_shortest_path_lengths(
-            self.dag, 0, self.fn
-        ).keys()
+        keys = rustworkx.dijkstra_shortest_path_lengths(self.dag, 0, self.fn).keys()
         self.assertEqual([1], list(keys))
 
     def test_values(self):
-        values = retworkx.dijkstra_shortest_path_lengths(
-            self.dag, 0, self.fn
-        ).values()
+        values = rustworkx.dijkstra_shortest_path_lengths(self.dag, 0, self.fn).values()
         self.assertEqual([1.0], list(values))
 
     def test_items(self):
-        items = retworkx.dijkstra_shortest_path_lengths(
-            self.dag, 0, self.fn
-        ).items()
+        items = rustworkx.dijkstra_shortest_path_lengths(self.dag, 0, self.fn).items()
         self.assertEqual([(1, 1.0)], list(items))
 
     def test_iter(self):
-        mapping_iter = iter(
-            retworkx.dijkstra_shortest_path_lengths(self.dag, 0, self.fn)
-        )
+        mapping_iter = iter(rustworkx.dijkstra_shortest_path_lengths(self.dag, 0, self.fn))
         output = list(mapping_iter)
         self.assertEqual(output, [1])
 
     def test_contains(self):
-        res = retworkx.dijkstra_shortest_path_lengths(self.dag, 0, self.fn)
+        res = rustworkx.dijkstra_shortest_path_lengths(self.dag, 0, self.fn)
         self.assertIn(1, res)
 
     def test_not_contains(self):
-        res = retworkx.dijkstra_shortest_path_lengths(self.dag, 0, self.fn)
+        res = rustworkx.dijkstra_shortest_path_lengths(self.dag, 0, self.fn)
         self.assertNotIn(0, res)
 
 
 class TestPos2DMapping(unittest.TestCase):
     def setUp(self):
-        self.dag = retworkx.PyDiGraph()
+        self.dag = rustworkx.PyDiGraph()
         self.dag.add_node("a")
 
     def test__eq__match(self):
-        res = retworkx.random_layout(self.dag, seed=10244242)
+        res = rustworkx.random_layout(self.dag, seed=10244242)
         self.assertTrue(res == {0: (0.4883489113112722, 0.6545867364101975)})
 
     def test__eq__not_match_keys(self):
-        self.assertFalse(
-            retworkx.random_layout(self.dag, seed=10244242) == {2: 1.0}
-        )
+        self.assertFalse(rustworkx.random_layout(self.dag, seed=10244242) == {2: 1.0})
 
     def test__eq__not_match_values(self):
-        self.assertFalse(
-            retworkx.random_layout(self.dag, seed=10244242) == {1: 2.0}
-        )
+        self.assertFalse(rustworkx.random_layout(self.dag, seed=10244242) == {1: 2.0})
 
     def test__eq__different_length(self):
-        res = retworkx.random_layout(self.dag, seed=10244242)
+        res = rustworkx.random_layout(self.dag, seed=10244242)
         self.assertFalse(res == {1: 1.0, 2: 2.0})
 
     def test_eq__same_type(self):
         self.assertEqual(
-            retworkx.random_layout(self.dag, seed=10244242),
-            retworkx.random_layout(self.dag, seed=10244242),
+            rustworkx.random_layout(self.dag, seed=10244242),
+            rustworkx.random_layout(self.dag, seed=10244242),
         )
 
     def test__eq__invalid_type(self):
-        self.assertFalse(
-            retworkx.random_layout(self.dag, seed=10244242) == {"a": None}
-        )
+        self.assertFalse(rustworkx.random_layout(self.dag, seed=10244242) == {"a": None})
 
     def test__ne__match(self):
-        res = retworkx.random_layout(self.dag, seed=10244242)
+        res = rustworkx.random_layout(self.dag, seed=10244242)
         self.assertFalse(res != {0: (0.4883489113112722, 0.6545867364101975)})
 
     def test__ne__not_match(self):
-        self.assertTrue(
-            retworkx.random_layout(self.dag, seed=10244242) != {2: 1.0}
-        )
+        self.assertTrue(rustworkx.random_layout(self.dag, seed=10244242) != {2: 1.0})
 
     def test__ne__not_match_values(self):
-        self.assertTrue(
-            retworkx.random_layout(self.dag, seed=10244242) != {1: 2.0}
-        )
+        self.assertTrue(rustworkx.random_layout(self.dag, seed=10244242) != {1: 2.0})
 
     def test__ne__different_length(self):
-        res = retworkx.random_layout(self.dag, seed=10244242)
+        res = rustworkx.random_layout(self.dag, seed=10244242)
 
         self.assertTrue(res != {1: 1.0, 2: 2.0})
 
     def test__ne__invalid_type(self):
-        self.assertTrue(
-            retworkx.random_layout(self.dag, seed=10244242) != ["a", None]
-        )
+        self.assertTrue(rustworkx.random_layout(self.dag, seed=10244242) != ["a", None])
 
     def test__gt__not_implemented(self):
         with self.assertRaises(NotImplementedError):
-            retworkx.random_layout(self.dag, seed=10244242) > {1: 1.0}
+            rustworkx.random_layout(self.dag, seed=10244242) > {1: 1.0}
 
     def test_deepcopy(self):
-        positions = retworkx.random_layout(self.dag)
+        positions = rustworkx.random_layout(self.dag)
         positions_copy = copy.deepcopy(positions)
         self.assertEqual(positions_copy, positions)
 
     def test_pickle(self):
-        pos = retworkx.random_layout(self.dag)
+        pos = rustworkx.random_layout(self.dag)
         pos_pickle = pickle.dumps(pos)
         pos_copy = pickle.loads(pos_pickle)
         self.assertEqual(pos, pos_copy)
 
     def test_str(self):
-        res = retworkx.random_layout(self.dag, seed=10244242)
+        res = rustworkx.random_layout(self.dag, seed=10244242)
         self.assertEqual(
             "Pos2DMapping{0: [0.4883489113112722, 0.6545867364101975]}",
             str(res),
         )
 
     def test_hash(self):
-        res = retworkx.random_layout(self.dag, seed=10244242)
+        res = rustworkx.random_layout(self.dag, seed=10244242)
         hash_res = hash(res)
         self.assertIsInstance(hash_res, int)
         # Assert hash is stable
         self.assertEqual(hash_res, hash(res))
 
     def test_index_error(self):
-        res = retworkx.random_layout(self.dag, seed=10244242)
+        res = rustworkx.random_layout(self.dag, seed=10244242)
         with self.assertRaises(IndexError):
             res[42]
 
     def test_keys(self):
-        keys = retworkx.random_layout(self.dag, seed=10244242).keys()
+        keys = rustworkx.random_layout(self.dag, seed=10244242).keys()
         self.assertEqual([0], list(keys))
 
     def test_values(self):
-        values = retworkx.random_layout(self.dag, seed=10244242).values()
+        values = rustworkx.random_layout(self.dag, seed=10244242).values()
         expected = [[0.4883489113112722, 0.6545867364101975]]
         self.assertEqual(expected, list(values))
 
     def test_items(self):
-        items = retworkx.random_layout(self.dag, seed=10244242).items()
-        self.assertEqual(
-            [(0, [0.4883489113112722, 0.6545867364101975])], list(items)
-        )
+        items = rustworkx.random_layout(self.dag, seed=10244242).items()
+        self.assertEqual([(0, [0.4883489113112722, 0.6545867364101975])], list(items))
 
     def test_iter(self):
-        mapping_iter = iter(retworkx.random_layout(self.dag, seed=10244242))
+        mapping_iter = iter(rustworkx.random_layout(self.dag, seed=10244242))
         output = list(mapping_iter)
         self.assertEqual(output, [0])
 
     def test_contains(self):
-        res = retworkx.random_layout(self.dag, seed=10244242)
+        res = rustworkx.random_layout(self.dag, seed=10244242)
         self.assertIn(0, res)
 
     def test_not_contains(self):
-        res = retworkx.random_layout(self.dag, seed=10244242)
+        res = rustworkx.random_layout(self.dag, seed=10244242)
         self.assertNotIn(1, res)
 
 
 class TestEdgeIndices(unittest.TestCase):
     def setUp(self):
-        self.dag = retworkx.PyDiGraph()
+        self.dag = rustworkx.PyDiGraph()
         self.dag.add_node("a")
         self.dag.add_child(0, "b", "edge")
 
@@ -966,102 +982,91 @@ class TestEdgeIndices(unittest.TestCase):
 
 class TestAllPairsPathMapping(unittest.TestCase):
     def setUp(self):
-        self.dag = retworkx.PyDAG()
+        self.dag = rustworkx.PyDAG()
         node_a = self.dag.add_node("a")
         self.dag.add_child(node_a, "b", "Edgy")
         self.fn = lambda _: 1.0
 
     def test__eq__match(self):
         self.assertTrue(
-            retworkx.all_pairs_dijkstra_shortest_paths(self.dag, self.fn)
+            rustworkx.all_pairs_dijkstra_shortest_paths(self.dag, self.fn)
             == {0: {1: [0, 1]}, 1: {}}
         )
 
     def test__eq__not_match_keys(self):
         self.assertFalse(
-            retworkx.all_pairs_dijkstra_shortest_paths(self.dag, self.fn)
+            rustworkx.all_pairs_dijkstra_shortest_paths(self.dag, self.fn)
             == {2: {2: [0, 1]}, 1: {}}
         )
 
     def test__eq__not_match_values(self):
         self.assertFalse(
-            retworkx.all_pairs_dijkstra_shortest_paths(self.dag, self.fn)
+            rustworkx.all_pairs_dijkstra_shortest_paths(self.dag, self.fn)
             == {0: {1: [0, 2]}, 1: {}}
         )
 
     def test__eq__different_length(self):
         self.assertFalse(
-            retworkx.all_pairs_dijkstra_shortest_paths(self.dag, self.fn)
-            == {1: [0, 1], 2: [0, 2]}
+            rustworkx.all_pairs_dijkstra_shortest_paths(self.dag, self.fn) == {1: [0, 1], 2: [0, 2]}
         )
 
     def test_eq__same_type(self):
         self.assertEqual(
-            retworkx.all_pairs_dijkstra_shortest_paths(self.dag, self.fn),
-            retworkx.all_pairs_dijkstra_shortest_paths(self.dag, self.fn),
+            rustworkx.all_pairs_dijkstra_shortest_paths(self.dag, self.fn),
+            rustworkx.all_pairs_dijkstra_shortest_paths(self.dag, self.fn),
         )
 
     def test__eq__invalid_type(self):
         self.assertFalse(
-            retworkx.all_pairs_dijkstra_shortest_paths(self.dag, self.fn)
-            == {"a": []}
+            rustworkx.all_pairs_dijkstra_shortest_paths(self.dag, self.fn) == {"a": []}
         )
 
     def test__eq__invalid_inner_type(self):
         self.assertFalse(
-            retworkx.all_pairs_dijkstra_shortest_paths(self.dag, self.fn)
-            == {0: {1: None}}
+            rustworkx.all_pairs_dijkstra_shortest_paths(self.dag, self.fn) == {0: {1: None}}
         )
 
     def test__ne__match(self):
         self.assertFalse(
-            retworkx.all_pairs_dijkstra_shortest_paths(self.dag, self.fn)
+            rustworkx.all_pairs_dijkstra_shortest_paths(self.dag, self.fn)
             != {0: {1: [0, 1]}, 1: {}}
         )
 
     def test__ne__not_match(self):
         self.assertTrue(
-            retworkx.all_pairs_dijkstra_shortest_paths(self.dag, self.fn)
-            != {2: [0, 1]}
+            rustworkx.all_pairs_dijkstra_shortest_paths(self.dag, self.fn) != {2: [0, 1]}
         )
 
     def test__ne__not_match_values(self):
         self.assertTrue(
-            retworkx.all_pairs_dijkstra_shortest_paths(self.dag, self.fn)
-            != {1: [0, 2]}
+            rustworkx.all_pairs_dijkstra_shortest_paths(self.dag, self.fn) != {1: [0, 2]}
         )
 
     def test__ne__different_length(self):
         self.assertTrue(
-            retworkx.all_pairs_dijkstra_shortest_paths(self.dag, self.fn)
-            != {1: [0, 1], 2: [0, 2]}
+            rustworkx.all_pairs_dijkstra_shortest_paths(self.dag, self.fn) != {1: [0, 1], 2: [0, 2]}
         )
 
     def test__ne__invalid_type(self):
-        self.assertTrue(
-            retworkx.all_pairs_dijkstra_shortest_paths(self.dag, self.fn)
-            != {"a": {}}
-        )
+        self.assertTrue(rustworkx.all_pairs_dijkstra_shortest_paths(self.dag, self.fn) != {"a": {}})
 
     def test__gt__not_implemented(self):
         with self.assertRaises(NotImplementedError):
-            retworkx.all_pairs_dijkstra_shortest_paths(self.dag, self.fn) > {
-                1: [0, 2]
-            }
+            rustworkx.all_pairs_dijkstra_shortest_paths(self.dag, self.fn) > {1: [0, 2]}
 
     def test_deepcopy(self):
-        paths = retworkx.all_pairs_dijkstra_shortest_paths(self.dag, self.fn)
+        paths = rustworkx.all_pairs_dijkstra_shortest_paths(self.dag, self.fn)
         paths_copy = copy.deepcopy(paths)
         self.assertEqual(paths, paths_copy)
 
     def test_pickle(self):
-        paths = retworkx.all_pairs_dijkstra_shortest_paths(self.dag, self.fn)
+        paths = rustworkx.all_pairs_dijkstra_shortest_paths(self.dag, self.fn)
         paths_pickle = pickle.dumps(paths)
         paths_copy = pickle.loads(paths_pickle)
         self.assertEqual(paths, paths_copy)
 
     def test_str(self):
-        res = retworkx.all_pairs_dijkstra_shortest_paths(self.dag, self.fn)
+        res = rustworkx.all_pairs_dijkstra_shortest_paths(self.dag, self.fn)
         # Since run in parallel the order is not deterministic
         expected_valid = [
             "AllPairsPathMapping{1: PathMapping{}, 0: PathMapping{1: [0, 1]}}",
@@ -1070,35 +1075,29 @@ class TestAllPairsPathMapping(unittest.TestCase):
         self.assertIn(str(res), expected_valid)
 
     def test_hash(self):
-        res = retworkx.all_pairs_dijkstra_shortest_paths(self.dag, self.fn)
+        res = rustworkx.all_pairs_dijkstra_shortest_paths(self.dag, self.fn)
         hash_res = hash(res)
         self.assertIsInstance(hash_res, int)
         # Assert hash is stable
         self.assertEqual(hash_res, hash(res))
 
     def test_index_error(self):
-        res = retworkx.all_pairs_dijkstra_shortest_paths(self.dag, self.fn)
+        res = rustworkx.all_pairs_dijkstra_shortest_paths(self.dag, self.fn)
         with self.assertRaises(IndexError):
             res[42]
 
     def test_keys(self):
-        keys = retworkx.all_pairs_dijkstra_shortest_paths(
-            self.dag, self.fn
-        ).keys()
+        keys = rustworkx.all_pairs_dijkstra_shortest_paths(self.dag, self.fn).keys()
         self.assertEqual([0, 1], list(sorted(keys)))
 
     def test_values(self):
-        values = retworkx.all_pairs_dijkstra_shortest_paths(
-            self.dag, self.fn
-        ).values()
+        values = rustworkx.all_pairs_dijkstra_shortest_paths(self.dag, self.fn).values()
         # Since run in parallel the order is not deterministic
         expected_valid = [[{1: [0, 1]}, {}], [{}, {1: [0, 1]}]]
         self.assertIn(list(values), expected_valid)
 
     def test_items(self):
-        items = retworkx.all_pairs_dijkstra_shortest_paths(
-            self.dag, self.fn
-        ).items()
+        items = rustworkx.all_pairs_dijkstra_shortest_paths(self.dag, self.fn).items()
         # Since run in parallel the order is not deterministic
         expected_valid = [
             [(0, {1: [0, 1]}), (1, {})],
@@ -1107,124 +1106,103 @@ class TestAllPairsPathMapping(unittest.TestCase):
         self.assertIn(list(items), expected_valid)
 
     def test_iter(self):
-        mapping_iter = iter(
-            retworkx.all_pairs_dijkstra_shortest_paths(self.dag, self.fn)
-        )
+        mapping_iter = iter(rustworkx.all_pairs_dijkstra_shortest_paths(self.dag, self.fn))
         output = list(sorted(mapping_iter))
         self.assertEqual(output, [0, 1])
 
     def test_contains(self):
-        res = retworkx.all_pairs_dijkstra_shortest_paths(self.dag, self.fn)
+        res = rustworkx.all_pairs_dijkstra_shortest_paths(self.dag, self.fn)
         self.assertIn(1, res)
 
     def test_not_contains(self):
-        res = retworkx.all_pairs_dijkstra_shortest_paths(self.dag, self.fn)
+        res = rustworkx.all_pairs_dijkstra_shortest_paths(self.dag, self.fn)
         self.assertNotIn(2, res)
 
 
 class TestAllPairsPathLengthMapping(unittest.TestCase):
     def setUp(self):
-        self.dag = retworkx.PyDAG()
+        self.dag = rustworkx.PyDAG()
         node_a = self.dag.add_node("a")
         self.dag.add_child(node_a, "b", "Edgy")
         self.fn = lambda _: 1.0
 
     def test__eq__match(self):
         self.assertTrue(
-            retworkx.all_pairs_dijkstra_path_lengths(self.dag, self.fn)
-            == {0: {1: 1.0}, 1: {}}
+            rustworkx.all_pairs_dijkstra_path_lengths(self.dag, self.fn) == {0: {1: 1.0}, 1: {}}
         )
 
     def test__eq__not_match_keys(self):
         self.assertFalse(
-            retworkx.all_pairs_dijkstra_path_lengths(self.dag, self.fn)
-            == {1: {2: 1.0}}
+            rustworkx.all_pairs_dijkstra_path_lengths(self.dag, self.fn) == {1: {2: 1.0}}
         )
 
     def test__eq__not_match_values(self):
         self.assertFalse(
-            retworkx.all_pairs_dijkstra_path_lengths(self.dag, self.fn)
-            == {0: {2: 2.0}}
+            rustworkx.all_pairs_dijkstra_path_lengths(self.dag, self.fn) == {0: {2: 2.0}}
         )
 
     def test__eq__different_length(self):
         self.assertFalse(
-            retworkx.all_pairs_dijkstra_path_lengths(self.dag, self.fn)
-            == {0: {1: 1.0, 2: 2.0}}
+            rustworkx.all_pairs_dijkstra_path_lengths(self.dag, self.fn) == {0: {1: 1.0, 2: 2.0}}
         )
 
     def test_eq__same_type(self):
         self.assertEqual(
-            retworkx.all_pairs_dijkstra_path_lengths(self.dag, self.fn),
-            retworkx.all_pairs_dijkstra_path_lengths(self.dag, self.fn),
+            rustworkx.all_pairs_dijkstra_path_lengths(self.dag, self.fn),
+            rustworkx.all_pairs_dijkstra_path_lengths(self.dag, self.fn),
         )
 
     def test__eq__invalid_type(self):
-        self.assertFalse(
-            retworkx.all_pairs_dijkstra_path_lengths(self.dag, self.fn)
-            == {"a": 2}
-        )
+        self.assertFalse(rustworkx.all_pairs_dijkstra_path_lengths(self.dag, self.fn) == {"a": 2})
 
     def test__eq__invalid_inner_type(self):
-        self.assertFalse(
-            retworkx.all_pairs_dijkstra_path_lengths(self.dag, self.fn)
-            == {0: "a"}
-        )
+        self.assertFalse(rustworkx.all_pairs_dijkstra_path_lengths(self.dag, self.fn) == {0: "a"})
 
     def test__ne__match(self):
         self.assertFalse(
-            retworkx.all_pairs_dijkstra_path_lengths(self.dag, self.fn)
-            != {0: {1: 1.0}, 1: {}}
+            rustworkx.all_pairs_dijkstra_path_lengths(self.dag, self.fn) != {0: {1: 1.0}, 1: {}}
         )
 
     def test__ne__not_match(self):
         self.assertTrue(
-            retworkx.all_pairs_dijkstra_path_lengths(self.dag, self.fn)
-            != {0: {2: 1.0}}
+            rustworkx.all_pairs_dijkstra_path_lengths(self.dag, self.fn) != {0: {2: 1.0}}
         )
 
     def test__ne__not_match_values(self):
         self.assertTrue(
-            retworkx.all_pairs_dijkstra_path_lengths(self.dag, self.fn)
-            != {0: {1: 2.0}}
+            rustworkx.all_pairs_dijkstra_path_lengths(self.dag, self.fn) != {0: {1: 2.0}}
         )
 
     def test__ne__different_length(self):
         self.assertTrue(
-            retworkx.all_pairs_dijkstra_path_lengths(self.dag, self.fn)
+            rustworkx.all_pairs_dijkstra_path_lengths(self.dag, self.fn)
             != {0: {1: 1.0}, 2: {1: 2.0}}
         )
 
     def test__ne__invalid_type(self):
-        self.assertTrue(
-            retworkx.all_pairs_dijkstra_path_lengths(self.dag, self.fn)
-            != {1: []}
-        )
+        self.assertTrue(rustworkx.all_pairs_dijkstra_path_lengths(self.dag, self.fn) != {1: []})
 
     def test__gt__not_implemented(self):
         with self.assertRaises(NotImplementedError):
-            retworkx.all_pairs_dijkstra_path_lengths(self.dag, self.fn) > {
-                1: 1.0
-            }
+            rustworkx.all_pairs_dijkstra_path_lengths(self.dag, self.fn) > {1: 1.0}
 
     def test_deepcopy(self):
-        paths = retworkx.all_pairs_dijkstra_path_lengths(self.dag, self.fn)
+        paths = rustworkx.all_pairs_dijkstra_path_lengths(self.dag, self.fn)
         paths_copy = copy.deepcopy(paths)
         self.assertEqual(paths, paths_copy)
 
     def test_pickle(self):
-        paths = retworkx.all_pairs_dijkstra_path_lengths(self.dag, self.fn)
+        paths = rustworkx.all_pairs_dijkstra_path_lengths(self.dag, self.fn)
         paths_pickle = pickle.dumps(paths)
         paths_copy = pickle.loads(paths_pickle)
         self.assertEqual(paths, paths_copy)
 
     def test_str(self):
-        res = retworkx.all_pairs_dijkstra_path_lengths(self.dag, lambda _: 3.14)
+        res = rustworkx.all_pairs_dijkstra_path_lengths(self.dag, lambda _: 3.14)
         # Since all_pairs_dijkstra_path_lengths() is parallel the order of the
         # output is non-determinisitic
         valid_values = [
-            "AllPairsPathLengthMapping{1: PathLengthMapping{}, "
-            "0: PathLengthMapping{1: 3.14}}",
+            "AllPairsPathLengthMapping{1: PathLengthMapping{}, " "0: PathLengthMapping{1: 3.14}}",
             "AllPairsPathLengthMapping{"
             "0: PathLengthMapping{1: 3.14}, "
             "1: PathLengthMapping{}}",
@@ -1232,229 +1210,418 @@ class TestAllPairsPathLengthMapping(unittest.TestCase):
         self.assertIn(str(res), valid_values)
 
     def test_hash(self):
-        res = retworkx.all_pairs_dijkstra_path_lengths(self.dag, self.fn)
+        res = rustworkx.all_pairs_dijkstra_path_lengths(self.dag, self.fn)
         hash_res = hash(res)
         self.assertIsInstance(hash_res, int)
         # Assert hash is stable
         self.assertEqual(hash_res, hash(res))
 
     def test_index_error(self):
-        res = retworkx.all_pairs_dijkstra_path_lengths(self.dag, self.fn)
+        res = rustworkx.all_pairs_dijkstra_path_lengths(self.dag, self.fn)
         with self.assertRaises(IndexError):
             res[42]
 
     def test_keys(self):
-        keys = retworkx.all_pairs_dijkstra_path_lengths(
-            self.dag, self.fn
-        ).keys()
-        self.assertEqual([0, 1], list(sorted((keys))))
+        keys = rustworkx.all_pairs_dijkstra_path_lengths(self.dag, self.fn).keys()
+        self.assertEqual([0, 1], list(sorted(keys)))
 
     def test_values(self):
-        values = retworkx.all_pairs_dijkstra_path_lengths(
-            self.dag, self.fn
-        ).values()
+        values = rustworkx.all_pairs_dijkstra_path_lengths(self.dag, self.fn).values()
         # Since run in parallel the order is not deterministic
         valid_expected = [[{}, {1: 1.0}], [{1: 1.0}, {}]]
         self.assertIn(list(values), valid_expected)
 
     def test_items(self):
-        items = retworkx.all_pairs_dijkstra_path_lengths(
-            self.dag, self.fn
-        ).items()
+        items = rustworkx.all_pairs_dijkstra_path_lengths(self.dag, self.fn).items()
         # Since run in parallel the order is not deterministic
         valid_expected = [[(0, {1: 1.0}), (1, {})], [(1, {}), (0, {1: 1.0})]]
         self.assertIn(list(items), valid_expected)
 
     def test_iter(self):
-        mapping_iter = iter(
-            retworkx.all_pairs_dijkstra_path_lengths(self.dag, self.fn)
-        )
+        mapping_iter = iter(rustworkx.all_pairs_dijkstra_path_lengths(self.dag, self.fn))
         output = list(sorted(mapping_iter))
         self.assertEqual(output, [0, 1])
 
     def test_contains(self):
-        res = retworkx.all_pairs_dijkstra_path_lengths(self.dag, self.fn)
+        res = rustworkx.all_pairs_dijkstra_path_lengths(self.dag, self.fn)
         self.assertIn(0, res)
 
     def test_not_contains(self):
-        res = retworkx.all_pairs_dijkstra_path_lengths(self.dag, self.fn)
+        res = rustworkx.all_pairs_dijkstra_path_lengths(self.dag, self.fn)
         self.assertNotIn(2, res)
 
 
 class TestNodeMap(unittest.TestCase):
     def setUp(self):
-        self.dag = retworkx.PyDAG()
+        self.dag = rustworkx.PyDAG()
         self.dag.add_node("a")
-        self.in_dag = retworkx.generators.directed_path_graph(1)
+        self.in_dag = rustworkx.generators.directed_path_graph(1)
 
     def test__eq__match(self):
         self.assertTrue(
-            self.dag.substitute_node_with_subgraph(
-                0, self.in_dag, lambda *args: None
-            )
-            == {0: 1}
+            self.dag.substitute_node_with_subgraph(0, self.in_dag, lambda *args: None) == {0: 1}
         )
 
     def test__eq__not_match_keys(self):
         self.assertFalse(
-            self.dag.substitute_node_with_subgraph(
-                0, self.in_dag, lambda *args: None
-            )
-            == {2: 1}
+            self.dag.substitute_node_with_subgraph(0, self.in_dag, lambda *args: None) == {2: 1}
         )
 
     def test__eq__not_match_values(self):
         self.assertFalse(
-            self.dag.substitute_node_with_subgraph(
-                0, self.in_dag, lambda *args: None
-            )
-            == {0: 2}
+            self.dag.substitute_node_with_subgraph(0, self.in_dag, lambda *args: None) == {0: 2}
         )
 
     def test__eq__different_length(self):
         self.assertFalse(
-            self.dag.substitute_node_with_subgraph(
-                0, self.in_dag, lambda *args: None
-            )
+            self.dag.substitute_node_with_subgraph(0, self.in_dag, lambda *args: None)
             == {0: 1, 1: 2}
         )
 
     def test_eq__same_type(self):
-        res = self.dag.substitute_node_with_subgraph(
-            0, self.in_dag, lambda *args: None
-        )
+        res = self.dag.substitute_node_with_subgraph(0, self.in_dag, lambda *args: None)
         self.assertEqual(res, res)
 
     def test__ne__match(self):
         self.assertFalse(
-            self.dag.substitute_node_with_subgraph(
-                0, self.in_dag, lambda *args: None
-            )
-            != {0: 1}
+            self.dag.substitute_node_with_subgraph(0, self.in_dag, lambda *args: None) != {0: 1}
         )
 
     def test__ne__not_match(self):
         self.assertTrue(
-            self.dag.substitute_node_with_subgraph(
-                0, self.in_dag, lambda *args: None
-            )
-            != {2: 2}
+            self.dag.substitute_node_with_subgraph(0, self.in_dag, lambda *args: None) != {2: 2}
         )
 
     def test__ne__not_match_values(self):
         self.assertTrue(
-            self.dag.substitute_node_with_subgraph(
-                0, self.in_dag, lambda *args: None
-            )
-            != {0: 2}
+            self.dag.substitute_node_with_subgraph(0, self.in_dag, lambda *args: None) != {0: 2}
         )
 
     def test__ne__different_length(self):
         self.assertTrue(
-            self.dag.substitute_node_with_subgraph(
-                0, self.in_dag, lambda *args: None
-            )
+            self.dag.substitute_node_with_subgraph(0, self.in_dag, lambda *args: None)
             != {0: 1, 1: 2}
         )
 
     def test__gt__not_implemented(self):
         with self.assertRaises(NotImplementedError):
-            self.dag.substitute_node_with_subgraph(
-                0, self.in_dag, lambda *args: None
-            ) > {1: 2}
+            self.dag.substitute_node_with_subgraph(0, self.in_dag, lambda *args: None) > {1: 2}
 
     def test__len__(self):
-        in_dag = retworkx.generators.directed_grid_graph(5, 5)
-        node_map = self.dag.substitute_node_with_subgraph(
-            0, in_dag, lambda *args: None
-        )
+        in_dag = rustworkx.generators.directed_grid_graph(5, 5)
+        node_map = self.dag.substitute_node_with_subgraph(0, in_dag, lambda *args: None)
         self.assertEqual(25, len(node_map))
 
     def test_deepcopy(self):
-        node_map = self.dag.substitute_node_with_subgraph(
-            0, self.in_dag, lambda *args: None
-        )
+        node_map = self.dag.substitute_node_with_subgraph(0, self.in_dag, lambda *args: None)
         node_map_copy = copy.deepcopy(node_map)
         self.assertEqual(node_map, node_map_copy)
 
     def test_pickle(self):
-        node_map = self.dag.substitute_node_with_subgraph(
-            0, self.in_dag, lambda *args: None
-        )
+        node_map = self.dag.substitute_node_with_subgraph(0, self.in_dag, lambda *args: None)
         node_map_pickle = pickle.dumps(node_map)
         node_map_copy = pickle.loads(node_map_pickle)
         self.assertEqual(node_map, node_map_copy)
 
     def test_str(self):
-        res = self.dag.substitute_node_with_subgraph(
-            0, self.in_dag, lambda *args: None
-        )
+        res = self.dag.substitute_node_with_subgraph(0, self.in_dag, lambda *args: None)
         self.assertEqual("NodeMap{0: 1}", str(res))
 
     def test_hash(self):
-        res = self.dag.substitute_node_with_subgraph(
-            0, self.in_dag, lambda *args: None
-        )
+        res = self.dag.substitute_node_with_subgraph(0, self.in_dag, lambda *args: None)
         hash_res = hash(res)
         self.assertIsInstance(hash_res, int)
         # Assert hash is stable
         self.assertEqual(hash_res, hash(res))
 
     def test_index_error(self):
-        res = self.dag.substitute_node_with_subgraph(
-            0, self.in_dag, lambda *args: None
-        )
+        res = self.dag.substitute_node_with_subgraph(0, self.in_dag, lambda *args: None)
         with self.assertRaises(IndexError):
             res[42]
 
     def test_keys(self):
-        keys = self.dag.substitute_node_with_subgraph(
-            0, self.in_dag, lambda *args: None
-        ).keys()
+        keys = self.dag.substitute_node_with_subgraph(0, self.in_dag, lambda *args: None).keys()
         self.assertEqual([0], list(keys))
 
     def test_values(self):
-        values = self.dag.substitute_node_with_subgraph(
-            0, self.in_dag, lambda *args: None
-        ).values()
+        values = self.dag.substitute_node_with_subgraph(0, self.in_dag, lambda *args: None).values()
         self.assertEqual([1], list(values))
 
     def test_items(self):
-        items = self.dag.substitute_node_with_subgraph(
-            0, self.in_dag, lambda *args: None
-        ).items()
+        items = self.dag.substitute_node_with_subgraph(0, self.in_dag, lambda *args: None).items()
         self.assertEqual([(0, 1)], list(items))
 
     def test_iter(self):
         mapping_iter = iter(
-            self.dag.substitute_node_with_subgraph(
-                0, self.in_dag, lambda *args: None
-            )
+            self.dag.substitute_node_with_subgraph(0, self.in_dag, lambda *args: None)
         )
         output = list(mapping_iter)
         self.assertEqual(output, [0])
 
     def test_contains(self):
-        res = self.dag.substitute_node_with_subgraph(
-            0, self.in_dag, lambda *args: None
-        )
+        res = self.dag.substitute_node_with_subgraph(0, self.in_dag, lambda *args: None)
         self.assertIn(0, res)
 
     def test_not_contains(self):
-        res = self.dag.substitute_node_with_subgraph(
-            0, self.in_dag, lambda *args: None
-        )
+        res = self.dag.substitute_node_with_subgraph(0, self.in_dag, lambda *args: None)
         self.assertNotIn(2, res)
 
     def test_iter_stable_for_same_obj(self):
-        graph = retworkx.PyDiGraph()
+        graph = rustworkx.PyDiGraph()
         graph.add_node(0)
-        in_graph = retworkx.generators.directed_path_graph(5)
-        res = self.dag.substitute_node_with_subgraph(
-            0, in_graph, lambda *args: None
-        )
+        in_graph = rustworkx.generators.directed_path_graph(5)
+        res = self.dag.substitute_node_with_subgraph(0, in_graph, lambda *args: None)
         first_iter = list(iter(res))
         second_iter = list(iter(res))
         third_iter = list(iter(res))
         self.assertEqual(first_iter, second_iter)
         self.assertEqual(first_iter, third_iter)
+
+
+class TestChainsComparisons(unittest.TestCase):
+    def setUp(self):
+        self.graph = rustworkx.generators.cycle_graph(3)
+        self.chains = rustworkx.chain_decomposition(self.graph)
+
+    def test__eq__match(self):
+        self.assertTrue(self.chains == [[(0, 2), (2, 1), (1, 0)]])
+
+    def test__eq__not_match(self):
+        self.assertFalse(self.chains == [[(0, 2), (2, 1), (2, 0)]])
+
+    def test__eq__different_length(self):
+        self.assertFalse(self.chains == [[(0, 2)]])
+
+    def test__eq__invalid_type(self):
+        with self.assertRaises(TypeError):
+            self.chains == [0]
+
+    def test__ne__match(self):
+        self.assertFalse(self.chains != [[(0, 2), (2, 1), (1, 0)]])
+
+    def test__ne__not_match(self):
+        self.assertTrue(self.chains != [[(0, 2), (2, 1), (2, 0)]])
+
+    def test__ne__different_length(self):
+        self.assertTrue(self.chains != [[(0, 2)]])
+
+    def test__ne__invalid_type(self):
+        with self.assertRaises(TypeError):
+            self.chains != [0]
+
+    def test__gt__not_implemented(self):
+        with self.assertRaises(NotImplementedError):
+            self.chains > [[(0, 2)]]
+
+    def test_deepcopy(self):
+        chains_copy = copy.deepcopy(self.chains)
+        self.assertEqual(self.chains, chains_copy)
+
+    def test_pickle(self):
+        chains_pickle = pickle.dumps(self.chains)
+        chains_copy = pickle.loads(chains_pickle)
+        self.assertEqual(self.chains, chains_copy)
+
+    def test_str(self):
+        self.assertEqual("Chains[EdgeList[(0, 2), (2, 1), (1, 0)]]", str(self.chains))
+
+    def test_hash(self):
+        hash_res = hash(self.chains)
+        self.assertIsInstance(hash_res, int)
+        # Assert hash is stable
+        self.assertEqual(hash_res, hash(self.chains))
+
+    def test_numpy_conversion(self):
+        # this test assumes the array is 1-dimensional which avoids issues with jagged arrays
+        self.assertTrue(np.asarray(self.chains).shape, (1,))
+
+    def test_iter(self):
+        self.assertEqual(list(self.chains), list(iter(self.chains)))
+
+    def test_reversed(self):
+        self.assertEqual(list(self.chains)[::-1], list(reversed(self.chains)))
+
+
+class TestProductNodeMap(unittest.TestCase):
+    def setUp(self):
+        self.first = rustworkx.PyGraph()
+        self.first.add_node("a0")
+        self.first.add_node("a1")
+
+        self.second = rustworkx.PyGraph()
+        self.second.add_node("b")
+        _, self.node_map = rustworkx.graph_cartesian_product(self.first, self.second)
+
+    def test__eq__match(self):
+        self.assertTrue(self.node_map == {(0, 0): 0, (1, 0): 1})
+
+    def test__eq__not_match_keys(self):
+        self.assertFalse(self.node_map == {(0, 0): 0, (2, 0): 1})
+
+    def test__eq__not_match_values(self):
+        self.assertFalse(self.node_map == {(0, 0): 0, (1, 0): 2})
+
+    def test__eq__different_length(self):
+        self.assertFalse(self.node_map == {(0, 0): 0})
+
+    def test_eq__same_type(self):
+        _, res = rustworkx.graph_cartesian_product(self.first, self.second)
+        self.assertEqual(self.node_map, res)
+
+    def test__ne__match(self):
+        self.assertFalse(self.node_map != {(0, 0): 0, (1, 0): 1})
+
+    def test__ne__not_match(self):
+        self.assertTrue(self.node_map != {(0, 0): 0, (2, 0): 1})
+
+    def test__ne__not_match_values(self):
+        self.assertTrue(self.node_map != {(0, 0): 0, (1, 0): 2})
+
+    def test__ne__different_length(self):
+        self.assertTrue(self.node_map != {(0, 0): 0})
+
+    def test__gt__not_implemented(self):
+        with self.assertRaises(NotImplementedError):
+            self.node_map > {1: 2}
+
+    def test__len__(self):
+        self.assertEqual(2, len(self.node_map))
+
+    def test_deepcopy(self):
+        node_map_copy = copy.deepcopy(self.node_map)
+        self.assertEqual(self.node_map, node_map_copy)
+
+    def test_pickle(self):
+        node_map_pickle = pickle.dumps(self.node_map)
+        node_map_copy = pickle.loads(node_map_pickle)
+        self.assertEqual(self.node_map, node_map_copy)
+
+    def test_str(self):
+        valid_str_output = [
+            "ProductNodeMap{(0, 0): 0, (1, 0): 1}",
+            "ProductNodeMap{(1, 0): 1, (0, 0): 0}",
+        ]
+        self.assertTrue(str(self.node_map) in valid_str_output)
+
+    def test_hash(self):
+        hash_res = hash(self.node_map)
+        self.assertIsInstance(hash_res, int)
+        # Assert hash is stable
+        self.assertEqual(hash_res, hash(self.node_map))
+
+    def test_index_error(self):
+        with self.assertRaises(IndexError):
+            self.node_map[(1, 1)]
+
+    def test_keys(self):
+        keys = self.node_map.keys()
+        self.assertEqual(set([(0, 0), (1, 0)]), set(keys))
+
+    def test_values(self):
+        values = self.node_map.values()
+        self.assertEqual(set([0, 1]), set(values))
+
+    def test_items(self):
+        items = self.node_map.items()
+        self.assertEqual(set([((0, 0), 0), ((1, 0), 1)]), set(items))
+
+    def test_iter(self):
+        mapping_iter = iter(self.node_map)
+        output = set(mapping_iter)
+        self.assertEqual(output, set([(0, 0), (1, 0)]))
+
+    def test_contains(self):
+        self.assertIn((0, 0), self.node_map)
+
+    def test_not_contains(self):
+        self.assertNotIn((1, 1), self.node_map)
+
+
+class TestBiconnectedComponentsMap(unittest.TestCase):
+    def setUp(self):
+        self.graph = rustworkx.generators.path_graph(3)
+        self.bicon_map = rustworkx.biconnected_components(self.graph)
+
+    def test__eq__match(self):
+        self.assertTrue(self.bicon_map == {(0, 1): 1, (1, 2): 0})
+
+    def test__eq__not_match_keys(self):
+        self.assertFalse(self.bicon_map == {(0, 0): 1, (2, 0): 0})
+
+    def test__eq__not_match_values(self):
+        self.assertFalse(self.bicon_map == {(0, 1): 2, (1, 2): 0})
+
+    def test__eq__different_length(self):
+        self.assertFalse(self.bicon_map == {(0, 1): 1})
+
+    def test_eq__same_type(self):
+        res = rustworkx.biconnected_components(self.graph)
+        self.assertEqual(self.bicon_map, res)
+
+    def test__ne__match(self):
+        self.assertFalse(self.bicon_map != {(0, 1): 1, (1, 2): 0})
+
+    def test__ne__not_match(self):
+        self.assertTrue(self.bicon_map != {(0, 2): 1, (1, 2): 0})
+
+    def test__ne__not_match_values(self):
+        self.assertTrue(self.bicon_map != {(0, 1): 0, (1, 2): 0})
+
+    def test__ne__different_length(self):
+        self.assertTrue(self.bicon_map != {(0, 1): 1})
+
+    def test__gt__not_implemented(self):
+        with self.assertRaises(NotImplementedError):
+            self.bicon_map > {1: 2}
+
+    def test__len__(self):
+        self.assertEqual(2, len(self.bicon_map))
+
+    def test_deepcopy(self):
+        bicon_map_copy = copy.deepcopy(self.bicon_map)
+        self.assertEqual(self.bicon_map, bicon_map_copy)
+
+    def test_pickle(self):
+        bicon_map_pickle = pickle.dumps(self.bicon_map)
+        bicon_map_copy = pickle.loads(bicon_map_pickle)
+        self.assertEqual(self.bicon_map, bicon_map_copy)
+
+    def test_str(self):
+        valid_str_output = [
+            "BiconnectedComponents{(0, 1): 1, (1, 2): 0}",
+            "BiconnectedComponents{(1, 2): 0, (0, 1): 1}",
+        ]
+        self.assertTrue(str(self.bicon_map) in valid_str_output)
+
+    def test_hash(self):
+        hash_res = hash(self.bicon_map)
+        self.assertIsInstance(hash_res, int)
+        # Assert hash is stable
+        self.assertEqual(hash_res, hash(self.bicon_map))
+
+    def test_index_error(self):
+        with self.assertRaises(IndexError):
+            self.bicon_map[(1, 1)]
+
+    def test_keys(self):
+        keys = self.bicon_map.keys()
+        self.assertEqual(set([(0, 1), (1, 2)]), set(keys))
+
+    def test_values(self):
+        values = self.bicon_map.values()
+        self.assertEqual(set([0, 1]), set(values))
+
+    def test_items(self):
+        items = self.bicon_map.items()
+        self.assertEqual(set([((0, 1), 1), ((1, 2), 0)]), set(items))
+
+    def test_iter(self):
+        mapping_iter = iter(self.bicon_map)
+        output = set(mapping_iter)
+        self.assertEqual(output, set([(0, 1), (1, 2)]))
+
+    def test_contains(self):
+        self.assertIn((0, 1), self.bicon_map)
+
+    def test_not_contains(self):
+        self.assertNotIn((0, 2), self.bicon_map)

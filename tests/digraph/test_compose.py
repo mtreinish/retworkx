@@ -12,38 +12,38 @@
 
 import unittest
 
-import retworkx
+import rustworkx
 
 
 class TestCompose(unittest.TestCase):
     def test_simple_dag_composition(self):
-        dag = retworkx.PyDAG()
+        dag = rustworkx.PyDAG()
         dag.check_cycle = True
         node_a = dag.add_node("a")
         node_b = dag.add_child(node_a, "b", {"a": 1})
         node_c = dag.add_child(node_b, "c", {"a": 2})
-        dag_other = retworkx.PyDAG()
+        dag_other = rustworkx.PyDAG()
         node_d = dag_other.add_node("d")
         dag_other.add_child(node_d, "e", {"a": 3})
         res = dag.compose(dag_other, {node_c: (node_d, {"b": 1})})
         self.assertEqual({0: 3, 1: 4}, res)
-        self.assertEqual([0, 1, 2, 3, 4], retworkx.topological_sort(dag))
+        self.assertEqual([0, 1, 2, 3, 4], rustworkx.topological_sort(dag))
 
     def test_compose_graph_onto_digraph_error(self):
-        digraph = retworkx.PyDiGraph()
-        graph = retworkx.PyGraph()
+        digraph = rustworkx.PyDiGraph()
+        graph = rustworkx.PyGraph()
         with self.assertRaises(TypeError):
             digraph.compose(graph, {})
 
     def test_edge_map_and_node_map_funcs_digraph_compose(self):
-        digraph = retworkx.PyDiGraph()
+        digraph = rustworkx.PyDiGraph()
         original_input_nodes = digraph.add_nodes_from(["qr[0]", "qr[1]"])
         original_op_nodes = digraph.add_nodes_from(["h"])
         output_nodes = digraph.add_nodes_from(["qr[0]", "qr[1]"])
         digraph.add_edge(original_input_nodes[0], original_op_nodes[0], "qr[0]")
         digraph.add_edge(original_op_nodes[0], output_nodes[0], "qr[0]")
         # Setup other graph
-        other_digraph = retworkx.PyDiGraph()
+        other_digraph = rustworkx.PyDiGraph()
         input_nodes = other_digraph.add_nodes_from(["qr[2]", "qr[3]"])
         op_nodes = other_digraph.add_nodes_from(["cx"])
         other_output_nodes = other_digraph.add_nodes_from(["qr[2]", "qr[3]"])
@@ -74,9 +74,7 @@ class TestCompose(unittest.TestCase):
             original_op_nodes[0]: (op_nodes[0], "qr[0]"),
             original_input_nodes[1]: (op_nodes[0], "qr[1]"),
         }
-        res = digraph.compose(
-            other_digraph, node_map, node_map_func=map_fn, edge_map_func=map_fn
-        )
+        res = digraph.compose(other_digraph, node_map, node_map_func=map_fn, edge_map_func=map_fn)
         self.assertEqual({2: 4, 3: 3, 4: 5}, res)
         self.assertEqual(digraph[res[other_output_nodes[0]]], "qr[0]")
         self.assertEqual(digraph[res[other_output_nodes[1]]], "qr[1]")

@@ -12,12 +12,12 @@
 
 import unittest
 
-import retworkx
+import rustworkx
 
 
 class TestAstarGraph(unittest.TestCase):
     def test_astar_null_heuristic(self):
-        g = retworkx.PyGraph()
+        g = rustworkx.PyGraph()
         a = g.add_node("A")
         b = g.add_node("B")
         c = g.add_node("C")
@@ -33,14 +33,14 @@ class TestAstarGraph(unittest.TestCase):
         g.add_edge(b, f, 15)
         g.add_edge(c, f, 11)
         g.add_edge(e, f, 6)
-        path = retworkx.graph_astar_shortest_path(
+        path = rustworkx.graph_astar_shortest_path(
             g, a, lambda goal: goal == "E", lambda x: float(x), lambda y: 0
         )
         expected = [a, c, d, e]
         self.assertEqual(expected, path)
 
     def test_astar_manhattan_heuristic(self):
-        g = retworkx.PyGraph()
+        g = rustworkx.PyGraph()
         a = g.add_node((0.0, 0.0))
         b = g.add_node((2.0, 0.0))
         c = g.add_node((1.0, 1.0))
@@ -73,7 +73,7 @@ class TestAstarGraph(unittest.TestCase):
         ]
 
         for index, end in enumerate([a, b, c, d, e, f]):
-            path = retworkx.graph_astar_shortest_path(
+            path = rustworkx.graph_astar_shortest_path(
                 g,
                 a,
                 lambda finish: finish_func(end, finish),
@@ -82,8 +82,8 @@ class TestAstarGraph(unittest.TestCase):
             )
             self.assertEqual(expected[index], path)
 
-        with self.assertRaises(retworkx.NoPathFound):
-            retworkx.graph_astar_shortest_path(
+        with self.assertRaises(rustworkx.NoPathFound):
+            rustworkx.graph_astar_shortest_path(
                 g,
                 a,
                 lambda finish: finish_func(no_path, finish),
@@ -92,9 +92,37 @@ class TestAstarGraph(unittest.TestCase):
             )
 
     def test_astar_graph_with_digraph_input(self):
-        g = retworkx.PyDAG()
+        g = rustworkx.PyDAG()
         g.add_node(0)
         with self.assertRaises(TypeError):
-            retworkx.graph_astar_shortest_path(
-                g, 0, lambda x: x, lambda y: 1, lambda z: 0
+            rustworkx.graph_astar_shortest_path(g, 0, lambda x: x, lambda y: 1, lambda z: 0)
+
+    def test_astar_with_invalid_weights(self):
+        g = rustworkx.PyGraph()
+        a = g.add_node("A")
+        b = g.add_node("B")
+        g.add_edge(a, b, 7)
+        for invalid_weight in [float("nan"), -1]:
+            with self.subTest(invalid_weight=invalid_weight):
+                with self.assertRaises(ValueError):
+                    rustworkx.graph_astar_shortest_path(
+                        g,
+                        a,
+                        goal_fn=lambda goal: goal == "B",
+                        edge_cost_fn=lambda _: invalid_weight,
+                        estimate_cost_fn=lambda _: 0,
+                    )
+
+    def test_astar_with_invalid_source_node(self):
+        g = rustworkx.PyGraph()
+        a = g.add_node("A")
+        b = g.add_node("B")
+        g.add_edge(a, b, 7)
+        with self.assertRaises(IndexError):
+            rustworkx.graph_astar_shortest_path(
+                g,
+                len(g.node_indices()) + 1,
+                goal_fn=lambda goal: goal == "B",
+                edge_cost_fn=lambda x: float(x),
+                estimate_cost_fn=lambda _: 0,
             )

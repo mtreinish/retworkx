@@ -10,11 +10,10 @@
 // License for the specific language governing permissions and limitations
 // under the License.
 
-use crate::dictmap::*;
 use hashbrown::HashMap;
+use rustworkx_core::dictmap::*;
 
-use super::weight_callable;
-use crate::get_edge_iter_with_weights;
+use crate::{get_edge_iter_with_weights, weight_callable};
 
 use pyo3::prelude::*;
 use pyo3::Python;
@@ -88,8 +87,7 @@ pub fn floyd_warshall<Ty: EdgeType>(
         let j = NodeIndexable::to_index(&graph, edge.target());
         let weight = edge.weight().clone();
 
-        let edge_weight =
-            weight_callable(py, &weight_fn, &weight, default_weight)?;
+        let edge_weight = weight_callable(py, &weight_fn, &weight, default_weight)?;
         if let Some(row_i) = mat.get_mut(i) {
             insert_or_minimize!(row_i, j, edge_weight);
         }
@@ -134,10 +132,7 @@ pub fn floyd_warshall<Ty: EdgeType>(
         .node_indices()
         .map(|i| {
             let out_map = PathLengthMapping {
-                path_lengths: mat[i.index()]
-                    .iter()
-                    .map(|(k, v)| (*k, *v))
-                    .collect(),
+                path_lengths: mat[i.index()].iter().map(|(k, v)| (*k, *v)).collect(),
             };
             (i.index(), out_map)
         })
@@ -153,16 +148,29 @@ pub fn floyd_warshall_numpy<Ty: EdgeType>(
     weight_fn: Option<PyObject>,
     as_undirected: bool,
     default_weight: f64,
+    generate_successors: bool,
     parallel_threshold: usize,
-) -> PyResult<Array2<f64>> {
+) -> PyResult<(Array2<f64>, Option<Array2<usize>>)> {
     let n = graph.node_count();
     // Allocate empty matrix
-    let mut mat = Array2::<f64>::from_elem((n, n), std::f64::INFINITY);
+    let mut mat = Array2::<f64>::from_elem((n, n), f64::INFINITY);
+    let mut next = if generate_successors {
+        let mut next = Array2::<usize>::from_elem((n, n), 0);
+
+        // Build `next` matrix
+        for i in 0..n {
+            for j in 0..n {
+                next[[i, j]] = j;
+            }
+        }
+        Some(next)
+    } else {
+        None
+    };
 
     // Build adjacency matrix
     for (i, j, weight) in get_edge_iter_with_weights(graph) {
-        let edge_weight =
-            weight_callable(py, &weight_fn, &weight, default_weight)?;
+        let edge_weight = weight_callable(py, &weight_fn, &weight, default_weight)?;
         mat[[i, j]] = mat[[i, j]].min(edge_weight);
         if as_undirected {
             mat[[j, i]] = mat[[j, i]].min(edge_weight);
@@ -182,9 +190,34 @@ pub fn floyd_warshall_numpy<Ty: EdgeType>(
                     let d_ijk = mat[[i, k]] + mat[[k, j]];
                     if d_ijk < mat[[i, j]] {
                         mat[[i, j]] = d_ijk;
+                        if let Some(next) = next.as_mut() {
+                            next[[i, j]] = next[[i, k]];
+                        }
                     }
                 }
             }
+        }
+    } else if let Some(next) = next.as_mut() {
+        for k in 0..n {
+            let row_k = mat.slice(s![k, ..]).to_owned();
+            mat.axis_iter_mut(Axis(0))
+                .into_par_iter()
+                .zip(next.axis_iter_mut(Axis(0)))
+                .for_each(|(mut row_i, mut next_i)| {
+                    let m_ik = row_i[k];
+                    let next_ik = next_i[k];
+                    row_i
+                        .iter_mut()
+                        .zip(row_k.iter())
+                        .zip(next_i.iter_mut())
+                        .for_each(|((m_ij, m_kj), next_ij)| {
+                            let d_ijk = m_ik + *m_kj;
+                            if d_ijk < *m_ij {
+                                *m_ij = d_ijk;
+                                *next_ij = next_ik;
+                            }
+                        })
+                })
         }
     } else {
         for k in 0..n {
@@ -193,16 +226,14 @@ pub fn floyd_warshall_numpy<Ty: EdgeType>(
                 .into_par_iter()
                 .for_each(|mut row_i| {
                     let m_ik = row_i[k];
-                    row_i.iter_mut().zip(row_k.iter()).for_each(
-                        |(m_ij, m_kj)| {
-                            let d_ijk = m_ik + *m_kj;
-                            if d_ijk < *m_ij {
-                                *m_ij = d_ijk;
-                            }
-                        },
-                    )
+                    row_i.iter_mut().zip(row_k.iter()).for_each(|(m_ij, m_kj)| {
+                        let d_ijk = m_ik + *m_kj;
+                        if d_ijk < *m_ij {
+                            *m_ij = d_ijk;
+                        }
+                    })
                 })
         }
     }
-    Ok(mat)
+    Ok((mat, next))
 }

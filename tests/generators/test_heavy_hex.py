@@ -12,17 +12,27 @@
 
 import unittest
 
-import retworkx
+import rustworkx
 
 
 class TestHeavyHexGraph(unittest.TestCase):
+    def test_directed_heavy_hex_graph_1(self):
+        d = 1
+        graph = rustworkx.generators.directed_heavy_hex_graph(d)
+        self.assertEqual(1, len(graph))
+        self.assertEqual(graph.edge_list(), [])
+
+    def test_heavy_hex_graph_1(self):
+        d = 1
+        graph = rustworkx.generators.heavy_hex_graph(d)
+        self.assertEqual(1, len(graph))
+        self.assertEqual(graph.edge_list(), [])
+
     def test_directed_heavy_hex_graph_3(self):
         d = 3
-        graph = retworkx.generators.directed_heavy_hex_graph(d)
+        graph = rustworkx.generators.directed_heavy_hex_graph(d)
         self.assertEqual(len(graph), (5 * d * d - 2 * d - 1) / 2)
-        self.assertEqual(
-            len(graph.edges()), 2 * d * (d - 1) + (d + 1) * (d - 1)
-        )
+        self.assertEqual(len(graph.edges()), 2 * d * (d - 1) + (d + 1) * (d - 1))
         expected_edges = [
             (0, 13),
             (1, 13),
@@ -49,13 +59,9 @@ class TestHeavyHexGraph(unittest.TestCase):
 
     def test_directed_heavy_hex_graph_3_bidirectional(self):
         d = 3
-        graph = retworkx.generators.directed_heavy_hex_graph(
-            d, bidirectional=True
-        )
+        graph = rustworkx.generators.directed_heavy_hex_graph(d, bidirectional=True)
         self.assertEqual(len(graph), (5 * d * d - 2 * d - 1) / 2)
-        self.assertEqual(
-            len(graph.edges()), 2 * (2 * d * (d - 1) + (d + 1) * (d - 1))
-        )
+        self.assertEqual(len(graph.edges()), 2 * (2 * d * (d - 1) + (d + 1) * (d - 1)))
         expected_edges = [
             (0, 13),
             (1, 13),
@@ -102,42 +108,38 @@ class TestHeavyHexGraph(unittest.TestCase):
 
     def test_heavy_hex_graph_3(self):
         d = 3
-        graph = retworkx.generators.heavy_hex_graph(d)
+        graph = rustworkx.generators.heavy_hex_graph(d)
         self.assertEqual(len(graph), (5 * d * d - 2 * d - 1) / 2)
-        self.assertEqual(
-            len(graph.edges()), 2 * d * (d - 1) + (d + 1) * (d - 1)
-        )
+        self.assertEqual(len(graph.edges()), 2 * d * (d - 1) + (d + 1) * (d - 1))
         expected_edges = [
             (0, 13),
-            (13, 1),
+            (1, 13),
             (1, 14),
-            (14, 2),
+            (2, 14),
             (3, 15),
-            (15, 4),
+            (4, 15),
             (4, 16),
-            (16, 5),
+            (5, 16),
             (6, 17),
-            (17, 7),
+            (7, 17),
             (7, 18),
-            (18, 8),
+            (8, 18),
             (0, 9),
-            (9, 3),
+            (3, 9),
             (5, 12),
-            (12, 8),
-            (14, 10),
+            (8, 12),
+            (10, 14),
             (10, 16),
-            (15, 11),
+            (11, 15),
             (11, 17),
         ]
         self.assertEqual(list(graph.edge_list()), expected_edges)
 
     def test_directed_heavy_hex_graph_5(self):
         d = 5
-        graph = retworkx.generators.directed_heavy_hex_graph(d)
+        graph = rustworkx.generators.directed_heavy_hex_graph(d)
         self.assertEqual(len(graph), (5 * d * d - 2 * d - 1) / 2)
-        self.assertEqual(
-            len(graph.edges()), 2 * d * (d - 1) + (d + 1) * (d - 1)
-        )
+        self.assertEqual(len(graph.edges()), 2 * d * (d - 1) + (d + 1) * (d - 1))
         expected_edges = [
             (0, 37),
             (1, 37),
@@ -208,13 +210,9 @@ class TestHeavyHexGraph(unittest.TestCase):
 
     def test_directed_heavy_hex_graph_5_bidirectional(self):
         d = 5
-        graph = retworkx.generators.directed_heavy_hex_graph(
-            d, bidirectional=True
-        )
+        graph = rustworkx.generators.directed_heavy_hex_graph(d, bidirectional=True)
         self.assertEqual(len(graph), (5 * d * d - 2 * d - 1) / 2)
-        self.assertEqual(
-            len(graph.edges()), 2 * (2 * d * (d - 1) + (d + 1) * (d - 1))
-        )
+        self.assertEqual(len(graph.edges()), 2 * (2 * d * (d - 1) + (d + 1) * (d - 1)))
         expected_edges = [
             (0, 37),
             (1, 37),
@@ -349,75 +347,73 @@ class TestHeavyHexGraph(unittest.TestCase):
 
     def test_heavy_hex_graph_5(self):
         d = 5
-        graph = retworkx.generators.heavy_hex_graph(d)
+        graph = rustworkx.generators.heavy_hex_graph(d)
         self.assertEqual(len(graph), (5 * d * d - 2 * d - 1) / 2)
-        self.assertEqual(
-            len(graph.edges()), 2 * d * (d - 1) + (d + 1) * (d - 1)
-        )
+        self.assertEqual(len(graph.edges()), 2 * d * (d - 1) + (d + 1) * (d - 1))
         expected_edges = [
             (0, 37),
-            (37, 1),
+            (1, 37),
             (1, 38),
-            (38, 2),
+            (2, 38),
             (2, 39),
-            (39, 3),
+            (3, 39),
             (3, 40),
-            (40, 4),
+            (4, 40),
             (5, 41),
-            (41, 6),
+            (6, 41),
             (6, 42),
-            (42, 7),
+            (7, 42),
             (7, 43),
-            (43, 8),
+            (8, 43),
             (8, 44),
-            (44, 9),
+            (9, 44),
             (10, 45),
-            (45, 11),
+            (11, 45),
             (11, 46),
-            (46, 12),
+            (12, 46),
             (12, 47),
-            (47, 13),
+            (13, 47),
             (13, 48),
-            (48, 14),
+            (14, 48),
             (15, 49),
-            (49, 16),
+            (16, 49),
             (16, 50),
-            (50, 17),
+            (17, 50),
             (17, 51),
-            (51, 18),
+            (18, 51),
             (18, 52),
-            (52, 19),
+            (19, 52),
             (20, 53),
-            (53, 21),
+            (21, 53),
             (21, 54),
-            (54, 22),
+            (22, 54),
             (22, 55),
-            (55, 23),
+            (23, 55),
             (23, 56),
-            (56, 24),
+            (24, 56),
             (0, 25),
-            (25, 5),
+            (5, 25),
             (9, 30),
-            (30, 14),
+            (14, 30),
             (10, 31),
-            (31, 15),
+            (15, 31),
             (19, 36),
-            (36, 24),
-            (38, 26),
+            (24, 36),
+            (26, 38),
             (26, 42),
-            (40, 27),
+            (27, 40),
             (27, 44),
-            (41, 28),
+            (28, 41),
             (28, 45),
-            (43, 29),
+            (29, 43),
             (29, 47),
-            (46, 32),
+            (32, 46),
             (32, 50),
-            (48, 33),
+            (33, 48),
             (33, 52),
-            (49, 34),
+            (34, 49),
             (34, 53),
-            (51, 35),
+            (35, 51),
             (35, 55),
         ]
 
@@ -425,4 +421,4 @@ class TestHeavyHexGraph(unittest.TestCase):
 
     def test_heavy_hex_graph_even_d(self):
         with self.assertRaises(IndexError):
-            retworkx.generators.heavy_hex_graph(2)
+            rustworkx.generators.heavy_hex_graph(2)

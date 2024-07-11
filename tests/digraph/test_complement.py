@@ -12,40 +12,36 @@
 
 import unittest
 
-import retworkx
+import rustworkx
 
 
 class TestComplement(unittest.TestCase):
     def test_null_graph(self):
-        graph = retworkx.PyDiGraph()
-        complement_graph = retworkx.complement(graph)
+        graph = rustworkx.PyDiGraph()
+        complement_graph = rustworkx.complement(graph)
         self.assertEqual(0, len(complement_graph.nodes()))
         self.assertEqual(0, len(complement_graph.edges()))
 
     def test_clique_directed(self):
         N = 5
-        graph = retworkx.PyDiGraph()
-        graph.extend_from_edge_list(
-            [(i, j) for i in range(N) for j in range(N) if i != j]
-        )
+        graph = rustworkx.PyDiGraph()
+        graph.extend_from_edge_list([(i, j) for i in range(N) for j in range(N) if i != j])
 
-        complement_graph = retworkx.complement(graph)
+        complement_graph = rustworkx.complement(graph)
         self.assertEqual(graph.nodes(), complement_graph.nodes())
         self.assertEqual(0, len(complement_graph.edges()))
 
     def test_empty_directed(self):
         N = 5
-        graph = retworkx.PyDiGraph()
+        graph = rustworkx.PyDiGraph()
         graph.add_nodes_from([i for i in range(N)])
 
-        expected_graph = retworkx.PyDiGraph()
-        expected_graph.extend_from_edge_list(
-            [(i, j) for i in range(N) for j in range(N) if i != j]
-        )
+        expected_graph = rustworkx.PyDiGraph()
+        expected_graph.extend_from_edge_list([(i, j) for i in range(N) for j in range(N) if i != j])
 
-        complement_graph = retworkx.complement(graph)
+        complement_graph = rustworkx.complement(graph)
         self.assertTrue(
-            retworkx.is_isomorphic(
+            rustworkx.is_isomorphic(
                 expected_graph,
                 complement_graph,
             )
@@ -53,29 +49,19 @@ class TestComplement(unittest.TestCase):
 
     def test_complement_directed(self):
         N = 8
-        graph = retworkx.PyDiGraph()
+        graph = rustworkx.PyDiGraph()
         graph.extend_from_edge_list(
-            [
-                (i, j)
-                for i in range(N)
-                for j in range(N)
-                if i != j and (i + j) % 3 == 0
-            ]
+            [(i, j) for i in range(N) for j in range(N) if i != j and (i + j) % 3 == 0]
         )
 
-        expected_graph = retworkx.PyDiGraph()
+        expected_graph = rustworkx.PyDiGraph()
         expected_graph.extend_from_edge_list(
-            [
-                (i, j)
-                for i in range(N)
-                for j in range(N)
-                if i != j and (i + j) % 3 != 0
-            ]
+            [(i, j) for i in range(N) for j in range(N) if i != j and (i + j) % 3 != 0]
         )
 
-        complement_graph = retworkx.complement(graph)
+        complement_graph = rustworkx.complement(graph)
         self.assertTrue(
-            retworkx.is_isomorphic(
+            rustworkx.is_isomorphic(
                 expected_graph,
                 complement_graph,
             )

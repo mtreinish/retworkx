@@ -12,12 +12,12 @@
 
 import unittest
 
-import retworkx
+import rustworkx
 
 
 class TestAdj(unittest.TestCase):
     def test_single_neighbor(self):
-        graph = retworkx.PyGraph()
+        graph = rustworkx.PyGraph()
         node_a = graph.add_node("a")
         node_b = graph.add_node("b")
         graph.add_edge(node_a, node_b, {"a": 1})
@@ -27,6 +27,6 @@ class TestAdj(unittest.TestCase):
         self.assertEqual({node_b: {"a": 1}, node_c: {"a": 2}}, res)
 
     def test_no_neighbor(self):
-        graph = retworkx.PyGraph()
+        graph = rustworkx.PyGraph()
         node_a = graph.add_node("a")
         self.assertEqual({}, graph.adj(node_a))

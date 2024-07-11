@@ -12,12 +12,12 @@
 
 import unittest
 
-import retworkx
+import rustworkx
 
 
 class TestMeshGraph(unittest.TestCase):
     def test_directed_mesh_graph(self):
-        graph = retworkx.generators.directed_mesh_graph(20)
+        graph = rustworkx.generators.directed_mesh_graph(20)
         self.assertEqual(len(graph), 20)
         self.assertEqual(len(graph.edges()), 380)
         for i in range(20):
@@ -28,7 +28,7 @@ class TestMeshGraph(unittest.TestCase):
             self.assertEqual(graph.out_edges(i), ls)
 
     def test_directed_mesh_graph_weights(self):
-        graph = retworkx.generators.directed_mesh_graph(weights=list(range(20)))
+        graph = rustworkx.generators.directed_mesh_graph(weights=list(range(20)))
         self.assertEqual(len(graph), 20)
         self.assertEqual([x for x in range(20)], graph.nodes())
         self.assertEqual(len(graph.edges()), 380)
@@ -41,19 +41,27 @@ class TestMeshGraph(unittest.TestCase):
 
     def test_mesh_directed_no_weights_or_num(self):
         with self.assertRaises(IndexError):
-            retworkx.generators.directed_mesh_graph()
+            rustworkx.generators.directed_mesh_graph()
 
     def test_mesh_graph(self):
-        graph = retworkx.generators.mesh_graph(20)
+        graph = rustworkx.generators.mesh_graph(20)
         self.assertEqual(len(graph), 20)
         self.assertEqual(len(graph.edges()), 190)
 
     def test_mesh_graph_weights(self):
-        graph = retworkx.generators.mesh_graph(weights=list(range(20)))
+        graph = rustworkx.generators.mesh_graph(weights=list(range(20)))
         self.assertEqual(len(graph), 20)
         self.assertEqual([x for x in range(20)], graph.nodes())
         self.assertEqual(len(graph.edges()), 190)
 
     def test_mesh_no_weights_or_num(self):
         with self.assertRaises(IndexError):
-            retworkx.generators.mesh_graph()
+            rustworkx.generators.mesh_graph()
+
+    def test_zero_size_mesh_graph(self):
+        graph = rustworkx.generators.mesh_graph(0)
+        self.assertEqual(0, len(graph))
+
+    def test_zero_size_directed_mesh_graph(self):
+        graph = rustworkx.generators.directed_mesh_graph(0)
+        self.assertEqual(0, len(graph))

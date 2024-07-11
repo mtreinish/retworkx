@@ -14,17 +14,15 @@ import unittest
 
 import numpy as np
 
-import retworkx
+import rustworkx
 
 
 class TestDistanceMatrix(unittest.TestCase):
     def test_graph_distance_matrix(self):
-        graph = retworkx.PyGraph()
+        graph = rustworkx.PyGraph()
         graph.add_nodes_from(list(range(7)))
-        graph.add_edges_from_no_data(
-            [(0, 1), (0, 6), (1, 2), (2, 3), (3, 4), (4, 5), (5, 6)]
-        )
-        dist = retworkx.graph_distance_matrix(graph)
+        graph.add_edges_from_no_data([(0, 1), (0, 6), (1, 2), (2, 3), (3, 4), (4, 5), (5, 6)])
+        dist = rustworkx.graph_distance_matrix(graph)
         expected = np.array(
             [
                 [0.0, 1.0, 2.0, 3.0, 3.0, 2.0, 1.0],
@@ -39,12 +37,10 @@ class TestDistanceMatrix(unittest.TestCase):
         self.assertTrue(np.array_equal(dist, expected))
 
     def test_graph_distance_matrix_parallel(self):
-        graph = retworkx.PyGraph()
+        graph = rustworkx.PyGraph()
         graph.add_nodes_from(list(range(7)))
-        graph.add_edges_from_no_data(
-            [(0, 1), (0, 6), (1, 2), (2, 3), (3, 4), (4, 5), (5, 6)]
-        )
-        dist = retworkx.graph_distance_matrix(graph, parallel_threshold=5)
+        graph.add_edges_from_no_data([(0, 1), (0, 6), (1, 2), (2, 3), (3, 4), (4, 5), (5, 6)])
+        dist = rustworkx.graph_distance_matrix(graph, parallel_threshold=5)
         expected = np.array(
             [
                 [0.0, 1.0, 2.0, 3.0, 3.0, 2.0, 1.0],
@@ -59,13 +55,11 @@ class TestDistanceMatrix(unittest.TestCase):
         self.assertTrue(np.array_equal(dist, expected))
 
     def test_graph_distance_matrix_non_zero_null(self):
-        graph = retworkx.PyGraph()
+        graph = rustworkx.PyGraph()
         graph.add_nodes_from(list(range(7)))
-        graph.add_edges_from_no_data(
-            [(0, 1), (0, 6), (1, 2), (2, 3), (3, 4), (4, 5), (5, 6)]
-        )
+        graph.add_edges_from_no_data([(0, 1), (0, 6), (1, 2), (2, 3), (3, 4), (4, 5), (5, 6)])
         graph.add_node(7)
-        dist = retworkx.graph_distance_matrix(graph, null_value=np.nan)
+        dist = rustworkx.graph_distance_matrix(graph, null_value=np.nan)
         expected = np.array(
             [
                 [0.0, 1.0, 2.0, 3.0, 3.0, 2.0, 1.0, np.nan],
@@ -81,15 +75,11 @@ class TestDistanceMatrix(unittest.TestCase):
         self.assertTrue(np.array_equal(dist, expected, equal_nan=True))
 
     def test_graph_distance_matrix_parallel_non_zero_null(self):
-        graph = retworkx.PyGraph()
+        graph = rustworkx.PyGraph()
         graph.add_nodes_from(list(range(7)))
-        graph.add_edges_from_no_data(
-            [(0, 1), (0, 6), (1, 2), (2, 3), (3, 4), (4, 5), (5, 6)]
-        )
+        graph.add_edges_from_no_data([(0, 1), (0, 6), (1, 2), (2, 3), (3, 4), (4, 5), (5, 6)])
         graph.add_node(7)
-        dist = retworkx.graph_distance_matrix(
-            graph, parallel_threshold=5, null_value=np.nan
-        )
+        dist = rustworkx.graph_distance_matrix(graph, parallel_threshold=5, null_value=np.nan)
         expected = np.array(
             [
                 [0.0, 1.0, 2.0, 3.0, 3.0, 2.0, 1.0, np.nan],
@@ -105,8 +95,8 @@ class TestDistanceMatrix(unittest.TestCase):
         self.assertTrue(np.array_equal(dist, expected, equal_nan=True))
 
     def test_graph_distance_matrix_node_hole(self):
-        graph = retworkx.generators.path_graph(4)
+        graph = rustworkx.generators.path_graph(4)
         graph.remove_node(0)
-        dist = retworkx.graph_distance_matrix(graph)
+        dist = rustworkx.graph_distance_matrix(graph)
         expected = np.array([[0.0, 1.0, 2.0], [1.0, 0.0, 1.0], [2.0, 1.0, 0.0]])
         self.assertTrue(np.array_equal(dist, expected))

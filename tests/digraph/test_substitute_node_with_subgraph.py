@@ -11,37 +11,31 @@
 # under the License.
 
 import unittest
-import retworkx
+import rustworkx
 
 
 class TestSubstitute(unittest.TestCase):
     def setUp(self):
         super().setUp()
-        self.graph = retworkx.generators.directed_path_graph(5)
+        self.graph = rustworkx.generators.directed_path_graph(5)
 
     def test_empty_replacement(self):
-        in_graph = retworkx.PyDiGraph()
-        res = self.graph.substitute_node_with_subgraph(
-            2, in_graph, lambda _, __, ___: None
-        )
+        in_graph = rustworkx.PyDiGraph()
+        res = self.graph.substitute_node_with_subgraph(2, in_graph, lambda _, __, ___: None)
         self.assertEqual(res, {})
         self.assertEqual([(0, 1), (3, 4)], self.graph.edge_list())
 
     def test_single_node(self):
-        in_graph = retworkx.PyDiGraph()
+        in_graph = rustworkx.PyDiGraph()
         in_graph.add_node(0)
         in_graph.add_child(0, 1, "edge")
-        res = self.graph.substitute_node_with_subgraph(
-            2, in_graph, lambda _, __, ___: 0
-        )
-        self.assertEqual(
-            [(0, 1), (3, 4), (5, 6), (1, 5), (5, 3)], self.graph.edge_list()
-        )
+        res = self.graph.substitute_node_with_subgraph(2, in_graph, lambda _, __, ___: 0)
+        self.assertEqual([(0, 1), (3, 4), (5, 6), (1, 5), (5, 3)], self.graph.edge_list())
         self.assertEqual("edge", self.graph.get_edge_data(5, 6))
         self.assertEqual(res, {0: 5, 1: 6})
 
     def test_node_filter(self):
-        in_graph = retworkx.PyDiGraph()
+        in_graph = rustworkx.PyDiGraph()
         in_graph.add_node(0)
         in_graph.add_child(0, 1, "edge")
         res = self.graph.substitute_node_with_subgraph(
@@ -50,13 +44,11 @@ class TestSubstitute(unittest.TestCase):
             lambda _, __, ___: 0,
             node_filter=lambda node: node == 0,
         )
-        self.assertEqual(
-            [(0, 1), (3, 4), (1, 5), (5, 3)], self.graph.edge_list()
-        )
+        self.assertEqual([(0, 1), (3, 4), (1, 5), (5, 3)], self.graph.edge_list())
         self.assertEqual(res, {0: 5})
 
     def test_edge_weight_modifier(self):
-        in_graph = retworkx.PyDiGraph()
+        in_graph = rustworkx.PyDiGraph()
         in_graph.add_node(0)
         in_graph.add_child(0, 1, "edge")
         res = self.graph.substitute_node_with_subgraph(
@@ -65,25 +57,21 @@ class TestSubstitute(unittest.TestCase):
             lambda _, __, ___: 0,
             edge_weight_map=lambda edge: edge + "-migrated",
         )
-        self.assertEqual(
-            [(0, 1), (3, 4), (5, 6), (1, 5), (5, 3)], self.graph.edge_list()
-        )
+        self.assertEqual([(0, 1), (3, 4), (5, 6), (1, 5), (5, 3)], self.graph.edge_list())
         self.assertEqual("edge-migrated", self.graph.get_edge_data(5, 6))
         self.assertEqual(res, {0: 5, 1: 6})
 
     def test_none_mapping(self):
-        in_graph = retworkx.PyDiGraph()
+        in_graph = rustworkx.PyDiGraph()
         in_graph.add_node(0)
         in_graph.add_child(0, 1, "edge")
-        res = self.graph.substitute_node_with_subgraph(
-            2, in_graph, lambda _, __, ___: None
-        )
+        res = self.graph.substitute_node_with_subgraph(2, in_graph, lambda _, __, ___: None)
         self.assertEqual([(0, 1), (3, 4), (5, 6)], self.graph.edge_list())
         self.assertEqual(res, {0: 5, 1: 6})
 
     def test_multiple_mapping(self):
-        graph = retworkx.generators.directed_star_graph(5)
-        in_graph = retworkx.generators.directed_star_graph(3, inward=True)
+        graph = rustworkx.generators.directed_star_graph(5)
+        in_graph = rustworkx.generators.directed_star_graph(3, inward=True)
 
         def map_function(source, target, _weight):
             if target > 2:
@@ -96,10 +84,8 @@ class TestSubstitute(unittest.TestCase):
         self.assertEqual(expected, graph.edge_list())
 
     def test_multiple_mapping_full(self):
-        graph = retworkx.generators.directed_star_graph(5)
-        in_graph = retworkx.generators.directed_star_graph(
-            weights=list(range(3)), inward=True
-        )
+        graph = rustworkx.generators.directed_star_graph(5)
+        in_graph = rustworkx.generators.directed_star_graph(weights=list(range(3)), inward=True)
         in_graph.add_edge(1, 2, None)
 
         def map_function(source, target, _weight):
@@ -113,9 +99,7 @@ class TestSubstitute(unittest.TestCase):
         def map_weight(_):
             return "migrated"
 
-        res = graph.substitute_node_with_subgraph(
-            0, in_graph, map_function, filter_fn, map_weight
-        )
+        res = graph.substitute_node_with_subgraph(0, in_graph, map_function, filter_fn, map_weight)
         self.assertEqual({1: 5, 2: 6}, res)
         expected = [
             (5, 6, "migrated"),
@@ -127,33 +111,27 @@ class TestSubstitute(unittest.TestCase):
         self.assertEqual(expected, graph.weighted_edge_list())
 
     def test_invalid_target(self):
-        in_graph = retworkx.generators.directed_grid_graph(5, 5)
+        in_graph = rustworkx.generators.directed_grid_graph(5, 5)
         with self.assertRaises(IndexError):
-            self.graph.substitute_node_with_subgraph(
-                0, in_graph, lambda *args: 42
-            )
+            self.graph.substitute_node_with_subgraph(0, in_graph, lambda *args: 42)
 
     def test_invalid_target_both_directions(self):
-        graph = retworkx.generators.directed_star_graph(4, inward=True)
-        in_graph = retworkx.generators.directed_grid_graph(5, 5)
+        graph = rustworkx.generators.directed_star_graph(4, inward=True)
+        in_graph = rustworkx.generators.directed_grid_graph(5, 5)
         with self.assertRaises(IndexError):
             graph.substitute_node_with_subgraph(0, in_graph, lambda *args: 42)
-        graph = retworkx.generators.directed_star_graph(4, inward=False)
+        graph = rustworkx.generators.directed_star_graph(4, inward=False)
         with self.assertRaises(IndexError):
             graph.substitute_node_with_subgraph(0, in_graph, lambda *args: 42)
 
     def test_invalid_node_id(self):
-        in_graph = retworkx.generators.directed_grid_graph(5, 5)
+        in_graph = rustworkx.generators.directed_grid_graph(5, 5)
         with self.assertRaises(IndexError):
-            self.graph.substitute_node_with_subgraph(
-                16, in_graph, lambda *args: None
-            )
+            self.graph.substitute_node_with_subgraph(16, in_graph, lambda *args: None)
 
     def test_bidrectional(self):
-        graph = retworkx.generators.directed_path_graph(5, bidirectional=True)
-        in_graph = retworkx.generators.directed_star_graph(
-            5, bidirectional=True
-        )
+        graph = rustworkx.generators.directed_path_graph(5, bidirectional=True)
+        in_graph = rustworkx.generators.directed_star_graph(5, bidirectional=True)
 
         def map_function(source, target, _weight):
             if source != 2:

@@ -10,278 +10,24 @@
 // License for the specific language governing permissions and limitations
 // under the License.
 
-use crate::iterators::CentralityMapping;
+#![allow(clippy::too_many_arguments)]
+
+use std::convert::TryFrom;
 
 use crate::digraph;
 use crate::graph;
-
-use pyo3::prelude::*;
-use std::collections::VecDeque;
-use std::sync::RwLock;
+use crate::iterators::{CentralityMapping, EdgeCentralityMapping};
+use crate::CostFn;
+use crate::FailedToConverge;
 
 use hashbrown::HashMap;
 use petgraph::graph::NodeIndex;
-use petgraph::visit::{
-    GraphBase,
-    GraphProp, // allows is_directed
-    IntoNeighborsDirected,
-    IntoNodeIdentifiers,
-    NodeCount,
-    NodeIndexable,
-};
-use rayon::prelude::*;
-
-// The algorithm here is taken from:
-// Ulrik Brandes, A Faster Algorithm for Betweenness Centrality.
-// Journal of Mathematical Sociology 25(2):163-177, 2001.
-//
-// Correspondence of variable names to quantities in the paper is as follows:
-//
-// P -- predecessors
-// S -- verts_sorted_by_distance,
-//      vertices in order of non-decreasing distance from s
-// Q -- Q
-// sigma -- sigma
-// delta -- delta
-// d -- distance
-
-pub fn betweenness_centrality<G>(
-    graph: G,
-    endpoints: bool,
-    normalized: bool,
-    parallel_threshold: usize,
-) -> Vec<Option<f64>>
-where
-    G: NodeIndexable
-        + IntoNodeIdentifiers
-        + IntoNeighborsDirected
-        + NodeCount
-        + GraphProp
-        + GraphBase<NodeId = NodeIndex>
-        + std::marker::Sync,
-    // rustfmt deletes the following comments if placed inline above
-    // + IntoNodeIdentifiers // for node_identifiers()
-    // + IntoNeighborsDirected // for neighbors()
-    // + NodeCount // for node_count
-    // + GraphProp // for is_directed
-{
-    let max_index = graph.node_bound();
-
-    let mut betweenness: Vec<Option<f64>> = vec![None; max_index];
-    for node_s in graph.node_identifiers() {
-        let is: usize = graph.to_index(node_s);
-        betweenness[is] = Some(0.0);
-    }
-    let locked_betweenness = RwLock::new(&mut betweenness);
-    let node_indices: Vec<NodeIndex> = graph.node_identifiers().collect();
-    if graph.node_count() < parallel_threshold {
-        node_indices
-            .iter()
-            .map(|node_s| {
-                (
-                    shortest_path_for_centrality(&graph, node_s),
-                    graph.to_index(*node_s),
-                )
-            })
-            .for_each(|(mut shortest_path_calc, is)| {
-                if endpoints {
-                    _accumulate_endpoints(
-                        &locked_betweenness,
-                        max_index,
-                        &mut shortest_path_calc,
-                        is,
-                    );
-                } else {
-                    _accumulate_basic(
-                        &locked_betweenness,
-                        max_index,
-                        &mut shortest_path_calc,
-                        is,
-                    );
-                }
-            });
-    } else {
-        node_indices
-            .par_iter()
-            .map(|node_s| {
-                (
-                    shortest_path_for_centrality(&graph, node_s),
-                    graph.to_index(*node_s),
-                )
-            })
-            .for_each(|(mut shortest_path_calc, is)| {
-                if endpoints {
-                    _accumulate_endpoints(
-                        &locked_betweenness,
-                        max_index,
-                        &mut shortest_path_calc,
-                        is,
-                    );
-                } else {
-                    _accumulate_basic(
-                        &locked_betweenness,
-                        max_index,
-                        &mut shortest_path_calc,
-                        is,
-                    );
-                }
-            });
-    }
-    _rescale(
-        &mut betweenness,
-        graph.node_count(),
-        normalized,
-        graph.is_directed(),
-        endpoints,
-    );
-
-    betweenness
-}
-
-fn _rescale(
-    betweenness: &mut Vec<Option<f64>>,
-    node_count: usize,
-    normalized: bool,
-    directed: bool,
-    endpoints: bool,
-) {
-    let mut do_scale = true;
-    let mut scale = 1.0;
-    if normalized {
-        if endpoints {
-            if node_count < 2 {
-                do_scale = false;
-            } else {
-                scale = 1.0 / (node_count * (node_count - 1)) as f64;
-            }
-        } else if node_count <= 2 {
-            do_scale = false;
-        } else {
-            scale = 1.0 / ((node_count - 1) * (node_count - 2)) as f64;
-        }
-    } else if !directed {
-        scale = 0.5;
-    } else {
-        do_scale = false;
-    }
-    if do_scale {
-        for x in betweenness.iter_mut() {
-            *x = x.map(|y| y * scale);
-        }
-    }
-}
-
-fn _accumulate_basic(
-    locked_betweenness: &RwLock<&mut Vec<Option<f64>>>,
-    max_index: usize,
-    path_calc: &mut ShortestPathData,
-    is: usize,
-) {
-    let mut delta = vec![0.0; max_index];
-    for w in &path_calc.verts_sorted_by_distance {
-        let iw = w.index();
-        let coeff = (1.0 + delta[iw]) / path_calc.sigma[w];
-        let p_w = path_calc.predecessors.get(w).unwrap();
-        for v in p_w {
-            let iv = (*v).index();
-            delta[iv] += path_calc.sigma[v] * coeff;
-        }
-    }
-    let mut betweenness = locked_betweenness.write().unwrap();
-    for w in &path_calc.verts_sorted_by_distance {
-        let iw = w.index();
-        if iw != is {
-            betweenness[iw] = betweenness[iw].map(|x| x + delta[iw]);
-        }
-    }
-}
-
-fn _accumulate_endpoints(
-    locked_betweenness: &RwLock<&mut Vec<Option<f64>>>,
-    max_index: usize,
-    path_calc: &mut ShortestPathData,
-    is: usize,
-) {
-    let mut delta = vec![0.0; max_index];
-    for w in &path_calc.verts_sorted_by_distance {
-        let iw = w.index();
-        let coeff = (1.0 + delta[iw]) / path_calc.sigma[w];
-        let p_w = path_calc.predecessors.get(w).unwrap();
-        for v in p_w {
-            let iv = (*v).index();
-            delta[iv] += path_calc.sigma[v] * coeff;
-        }
-    }
-    let mut betweenness = locked_betweenness.write().unwrap();
-    betweenness[is] = betweenness[is]
-        .map(|x| x + ((path_calc.verts_sorted_by_distance.len() - 1) as f64));
-    for w in &path_calc.verts_sorted_by_distance {
-        let iw = w.index();
-        if iw != is {
-            betweenness[iw] = betweenness[iw].map(|x| x + delta[iw] + 1.0);
-        }
-    }
-}
-
-struct ShortestPathData {
-    verts_sorted_by_distance: Vec<NodeIndex>,
-    predecessors: HashMap<NodeIndex, Vec<NodeIndex>>,
-    sigma: HashMap<NodeIndex, f64>,
-}
-
-fn shortest_path_for_centrality<G>(
-    graph: G,
-    node_s: &G::NodeId,
-) -> ShortestPathData
-where
-    G: NodeIndexable
-        + IntoNodeIdentifiers
-        + IntoNeighborsDirected
-        + NodeCount
-        + GraphBase<NodeId = NodeIndex>, // for get() and get_mut()
-{
-    let mut verts_sorted_by_distance: Vec<NodeIndex> = Vec::new(); // a stack
-    let c = graph.node_count();
-    let mut predecessors =
-        HashMap::<G::NodeId, Vec<G::NodeId>>::with_capacity(c);
-    let mut sigma = HashMap::<G::NodeId, f64>::with_capacity(c);
-    let mut distance = HashMap::<G::NodeId, i64>::with_capacity(c);
-    #[allow(non_snake_case)]
-    let mut Q: VecDeque<NodeIndex> = VecDeque::with_capacity(c);
-
-    let i_s = graph.to_index(*node_s);
-    let index_s = NodeIndex::new(i_s);
-
-    for node in graph.node_identifiers() {
-        predecessors.insert(node, Vec::new());
-        sigma.insert(node, 0.0);
-        distance.insert(node, -1);
-    }
-    sigma.insert(index_s, 1.0);
-    distance.insert(index_s, 0);
-    Q.push_back(index_s);
-    while let Some(v) = Q.pop_front() {
-        verts_sorted_by_distance.push(v);
-        let distance_v = distance[&v];
-        for w in graph.neighbors(v) {
-            if distance[&w] < 0 {
-                Q.push_back(w);
-                distance.insert(w, distance_v + 1);
-            }
-            if distance[&w] == distance_v + 1 {
-                sigma.insert(w, sigma[&w] + sigma[&v]);
-                let e_p = predecessors.get_mut(&w).unwrap();
-                e_p.push(v);
-            }
-        }
-    }
-    verts_sorted_by_distance.reverse(); // will be effectively popping from the stack
-    ShortestPathData {
-        verts_sorted_by_distance,
-        predecessors,
-        sigma,
-    }
-}
+use petgraph::visit::EdgeIndexable;
+use petgraph::visit::EdgeRef;
+use petgraph::visit::IntoNodeIdentifiers;
+use pyo3::exceptions::PyValueError;
+use pyo3::prelude::*;
+use rustworkx_core::centrality;
 
 /// Compute the betweenness centrality of all nodes in a PyGraph.
 ///
@@ -293,7 +39,7 @@ where
 ///    c_B(v) =\sum_{s,t \in V} \frac{\sigma(s, t|v)}{\sigma(s, t)}
 ///
 /// where :math:`V` is the set of nodes, :math:`\sigma(s, t)` is the number of
-/// shortest :math`(s, t)` paths, and :math:`\sigma(s, t|v)` is the number of
+/// shortest :math:`(s, t)` paths, and :math:`\sigma(s, t|v)` is the number of
 /// those paths  passing through some  node :math:`v` other than :math:`s, t`.
 /// If :math:`s = t`, :math:`\sigma(s, t) = 1`, and if :math:`v \in {s, t}`,
 /// :math:`\sigma(s, t|v) = 0`
@@ -307,6 +53,10 @@ where
 /// of nodes in the graph is above the value of ``parallel_threshold`` (it
 /// defaults to 50). If the function will be running in parallel the env var
 /// ``RAYON_NUM_THREADS`` can be used to adjust how many threads will be used.
+///
+/// See Also
+/// --------
+/// graph_edge_betweenness_centrality
 ///
 /// :param PyGraph graph: The input graph
 /// :param bool normalized: Whether to normalize the betweenness scores by the number of distinct
@@ -322,25 +72,22 @@ where
 ///      betweenness score for each node.
 /// :rtype: CentralityMapping
 #[pyfunction(
-    normalized = "true",
-    endpoints = "false",
-    parallel_threshold = "50"
+    signature = (
+        graph,
+        normalized=true,
+        endpoints=false,
+        parallel_threshold=50
+    )
 )]
-#[pyo3(
-    text_signature = "(graph, /, normalized=True, endpoints=False, parallel_threshold=50)"
-)]
+#[pyo3(text_signature = "(graph, /, normalized=True, endpoints=False, parallel_threshold=50)")]
 pub fn graph_betweenness_centrality(
     graph: &graph::PyGraph,
     normalized: bool,
     endpoints: bool,
     parallel_threshold: usize,
 ) -> CentralityMapping {
-    let betweenness = betweenness_centrality(
-        &graph.graph,
-        endpoints,
-        normalized,
-        parallel_threshold,
-    );
+    let betweenness =
+        centrality::betweenness_centrality(&graph.graph, endpoints, normalized, parallel_threshold);
     CentralityMapping {
         centralities: betweenness
             .into_iter()
@@ -375,6 +122,10 @@ pub fn graph_betweenness_centrality(
 /// defaults to 50). If the function will be running in parallel the env var
 /// ``RAYON_NUM_THREADS`` can be used to adjust how many threads will be used.
 ///
+/// See Also
+/// --------
+/// digraph_edge_betweenness_centrality
+///
 /// :param PyDiGraph graph: The input graph
 /// :param bool normalized: Whether to normalize the betweenness scores by the number of distinct
 ///    paths between all pairs of nodes.
@@ -389,30 +140,686 @@ pub fn graph_betweenness_centrality(
 ///      betweenness score for each node.
 /// :rtype: CentralityMapping
 #[pyfunction(
-    normalized = "true",
-    endpoints = "false",
-    parallel_threshold = "50"
+    signature = (
+        graph,
+        normalized=true,
+        endpoints=false,
+        parallel_threshold=50
+    )
 )]
-#[pyo3(
-    text_signature = "(graph, /, normalized=True, endpoints=False, parallel_threshold=50)"
-)]
+#[pyo3(text_signature = "(graph, /, normalized=True, endpoints=False, parallel_threshold=50)")]
 pub fn digraph_betweenness_centrality(
     graph: &digraph::PyDiGraph,
     normalized: bool,
     endpoints: bool,
     parallel_threshold: usize,
 ) -> CentralityMapping {
-    let betweenness = betweenness_centrality(
-        &graph.graph,
-        endpoints,
-        normalized,
-        parallel_threshold,
-    );
+    let betweenness =
+        centrality::betweenness_centrality(&graph.graph, endpoints, normalized, parallel_threshold);
     CentralityMapping {
         centralities: betweenness
             .into_iter()
             .enumerate()
             .filter_map(|(i, v)| v.map(|x| (i, x)))
             .collect(),
+    }
+}
+
+/// Compute the closeness centrality of each node in a :class:`~.PyGraph` object.
+///
+/// The closeness centrality of a node :math:`u` is defined as the
+/// reciprocal of the average shortest path distance to :math:`u` over all
+/// :math:`n-1` reachable nodes in the graph. In it's general form this can
+/// be expressed as:
+///
+/// .. math::
+///
+///     C(u) = \frac{n - 1}{\sum_{v=1}^{n-1} d(v, u)},
+///
+/// where:
+///
+///   * :math:`d(v, u)` - the shortest-path distance between :math:`v` and
+///     :math:`u`
+///   * :math:`n` - the number of nodes that can reach :math:`u`.
+///
+/// In the case of a graphs with more than one connected component there is
+/// an alternative improved formula that calculates the closeness centrality
+/// as "a ratio of the fraction of actors in the group who are reachable, to
+/// the average distance" [WF]_. This can be expressed as
+///
+/// .. math::
+///
+///     C_{WF}(u) = \frac{n-1}{N-1} \frac{n - 1}{\sum_{v=1}^{n-1} d(v, u)},
+///
+/// where :math:`N` is the number of nodes in the graph. This alternative
+/// formula can be used with the ``wf_improved`` argument.
+///
+/// :param PyGraph graph: The input graph. Can either be a
+///     :class:`~retworkx.PyGraph` or :class:`~retworkx.PyDiGraph`.
+/// :param bool wf_improved: This is optional; the default is True. If True,
+///     scale by the fraction of nodes reachable.
+///
+/// :returns: A dictionary mapping each node index to its closeness centrality.
+/// :rtype: CentralityMapping
+#[pyfunction(signature = (graph, wf_improved=true))]
+pub fn graph_closeness_centrality(graph: &graph::PyGraph, wf_improved: bool) -> CentralityMapping {
+    let closeness = centrality::closeness_centrality(&graph.graph, wf_improved);
+    CentralityMapping {
+        centralities: closeness
+            .into_iter()
+            .enumerate()
+            .filter_map(|(i, v)| v.map(|x| (i, x)))
+            .collect(),
+    }
+}
+
+/// Compute the closeness centrality of each node in a :class:`~.PyDiGraph` object.
+///
+/// The closeness centrality of a node :math:`u` is defined as the
+/// reciprocal of the average shortest path distance to :math:`u` over all
+/// :math:`n-1` reachable nodes in the graph. In it's general form this can
+/// be expressed as:
+///
+/// .. math::
+///
+///     C(u) = \frac{n - 1}{\sum_{v=1}^{n-1} d(v, u)},
+///
+/// where:
+///
+///   * :math:`d(v, u)` - the shortest-path distance between :math:`v` and
+///     :math:`u`
+///   * :math:`n` - the number of nodes that can reach :math:`u`.
+///
+/// In the case of a graphs with more than one connected component there is
+/// an alternative improved formula that calculates the closeness centrality
+/// as "a ratio of the fraction of actors in the group who are reachable, to
+/// the average distance" [WF]_. This can be expressed as
+///
+/// .. math::
+///
+///     C_{WF}(u) = \frac{n-1}{N-1} \frac{n - 1}{\sum_{v=1}^{n-1} d(v, u)},
+///
+/// where :math:`N` is the number of nodes in the graph. This alternative
+/// formula can be used with the ``wf_improved`` argument.
+///
+/// :param PyDiGraph graph: The input graph. Can either be a
+///     :class:`~retworkx.PyGraph` or :class:`~retworkx.PyDiGraph`.
+/// :param bool wf_improved: This is optional; the default is True. If True,
+///     scale by the fraction of nodes reachable.
+///
+/// :returns: A dictionary mapping each node index to its closeness centrality.
+/// :rtype: CentralityMapping
+#[pyfunction(signature = (graph, wf_improved=true))]
+pub fn digraph_closeness_centrality(
+    graph: &digraph::PyDiGraph,
+    wf_improved: bool,
+) -> CentralityMapping {
+    let closeness = centrality::closeness_centrality(&graph.graph, wf_improved);
+    CentralityMapping {
+        centralities: closeness
+            .into_iter()
+            .enumerate()
+            .filter_map(|(i, v)| v.map(|x| (i, x)))
+            .collect(),
+    }
+}
+
+/// Compute the edge betweenness centrality of all edges in a :class:`~PyGraph`.
+///
+/// Edge betweenness centrality of an edge :math:`e` is the sum of the
+/// fraction of all-pairs shortest paths that pass through :math`e`
+///
+/// .. math::
+///
+///   c_B(e) =\sum_{s,t \in V} \frac{\sigma(s, t|e)}{\sigma(s, t)}
+///
+/// where :math:`V` is the set of nodes, :math:`\sigma(s, t)` is the
+/// number of shortest :math:`(s, t)`-paths, and :math:`\sigma(s, t|e)` is
+/// the number of those paths passing through edge :math:`e`.
+///
+/// The above definition and the algorithm used in this function is based on:
+///
+/// Ulrik Brandes, On Variants of Shortest-Path Betweenness Centrality
+/// and their Generic Computation. Social Networks 30(2):136-145, 2008.
+///
+/// This function is multithreaded and will run in parallel if the number
+/// of nodes in the graph is above the value of ``parallel_threshold`` (it
+/// defaults to 50). If the function will be running in parallel the env var
+/// ``RAYON_NUM_THREADS`` can be used to adjust how many threads will be used.
+///
+/// See Also
+/// --------
+/// graph_betweenness_centrality
+///
+/// :param PyGraph graph: The input graph
+/// :param bool normalized: Whether to normalize the betweenness scores by the number of distinct
+///    paths between all pairs of nodes.
+/// :param int parallel_threshold: The number of nodes to calculate the
+///     the betweenness centrality in parallel at if the number of nodes in
+///     the graph is less than this value it will run in a single thread. The
+///     default value is 50
+///
+/// :returns: a read-only dict-like object whose keys are the edge indices and values are the
+///      betweenness score for each edge.
+/// :rtype: EdgeCentralityMapping
+#[pyfunction(
+    signature = (
+        graph,
+        normalized=true,
+        parallel_threshold=50
+    )
+)]
+#[pyo3(text_signature = "(graph, /, normalized=True, parallel_threshold=50)")]
+pub fn graph_edge_betweenness_centrality(
+    graph: &graph::PyGraph,
+    normalized: bool,
+    parallel_threshold: usize,
+) -> PyResult<EdgeCentralityMapping> {
+    let betweenness =
+        centrality::edge_betweenness_centrality(&graph.graph, normalized, parallel_threshold);
+    Ok(EdgeCentralityMapping {
+        centralities: betweenness
+            .into_iter()
+            .enumerate()
+            .filter_map(|(i, v)| v.map(|x| (i, x)))
+            .collect(),
+    })
+}
+
+/// Compute the edge betweenness centrality of all edges in a :class:`~PyDiGraph`.
+///
+/// Edge betweenness centrality of an edge :math:`e` is the sum of the
+/// fraction of all-pairs shortest paths that pass through :math`e`
+///
+/// .. math::
+///
+///   c_B(e) =\sum_{s,t \in V} \frac{\sigma(s, t|e)}{\sigma(s, t)}
+///
+/// where :math:`V` is the set of nodes, :math:`\sigma(s, t)` is the
+/// number of shortest :math:`(s, t)`-paths, and :math:`\sigma(s, t|e)` is
+/// the number of those paths passing through edge :math:`e`.
+///
+/// The above definition and the algorithm used in this function is based on:
+///
+/// Ulrik Brandes, On Variants of Shortest-Path Betweenness Centrality
+/// and their Generic Computation. Social Networks 30(2):136-145, 2008.
+///
+/// This function is multithreaded and will run in parallel if the number
+/// of nodes in the graph is above the value of ``parallel_threshold`` (it
+/// defaults to 50). If the function will be running in parallel the env var
+/// ``RAYON_NUM_THREADS`` can be used to adjust how many threads will be used.
+///
+/// See Also
+/// --------
+/// digraph_betweenness_centrality
+///
+/// :param PyGraph graph: The input graph
+/// :param bool normalized: Whether to normalize the betweenness scores by the number of distinct
+///    paths between all pairs of nodes.
+/// :param int parallel_threshold: The number of nodes to calculate the
+///     the betweenness centrality in parallel at if the number of nodes in
+///     the graph is less than this value it will run in a single thread. The
+///     default value is 50
+///
+/// :returns: a read-only dict-like object whose keys are edges and values are the
+///      betweenness score for each node.
+/// :rtype: EdgeCentralityMapping
+#[pyfunction(
+    signature = (
+        graph,
+        normalized=true,
+        parallel_threshold=50
+    )
+)]
+#[pyo3(text_signature = "(graph, /, normalized=True, parallel_threshold=50)")]
+pub fn digraph_edge_betweenness_centrality(
+    graph: &digraph::PyDiGraph,
+    normalized: bool,
+    parallel_threshold: usize,
+) -> PyResult<EdgeCentralityMapping> {
+    let betweenness =
+        centrality::edge_betweenness_centrality(&graph.graph, normalized, parallel_threshold);
+    Ok(EdgeCentralityMapping {
+        centralities: betweenness
+            .into_iter()
+            .enumerate()
+            .filter_map(|(i, v)| v.map(|x| (i, x)))
+            .collect(),
+    })
+}
+
+/// Compute the eigenvector centrality of a :class:`~PyGraph`.
+///
+/// For details on the eigenvector centrality refer to:
+///
+/// Phillip Bonacich. “Power and Centrality: A Family of Measures.”
+/// American Journal of Sociology 92(5):1170–1182, 1986
+/// <https://doi.org/10.1086/228631>
+///
+/// This function uses a power iteration method to compute the eigenvector
+/// and convergence is not guaranteed. The function will stop when `max_iter`
+/// iterations is reached or when the computed vector between two iterations
+/// is smaller than the error tolerance multiplied by the number of nodes.
+/// The implementation of this algorithm is based on the NetworkX
+/// `eigenvector_centrality() <https://networkx.org/documentation/stable/reference/algorithms/generated/networkx.algorithms.centrality.eigenvector_centrality.html>`__
+/// function.
+///
+/// In the case of multigraphs the weights of any parallel edges will be
+/// summed when computing the eigenvector centrality.
+///
+/// :param PyGraph graph: The graph object to run the algorithm on
+/// :param weight_fn: An optional input callable that will be passed the edge's
+///     payload object and is expected to return a `float` weight for that edge.
+///     If this is not specified ``default_weight`` will be used as the weight
+///     for every edge in ``graph``
+/// :param float default_weight: If ``weight_fn`` is not set the default weight
+///     value to use for the weight of all edges
+/// :param int max_iter: The maximum number of iterations in the power method. If
+///     not specified a default value of 100 is used.
+/// :param float tol: The error tolerance used when checking for convergence in the
+///     power method. If this is not specified default value of 1e-6 is used.
+///
+/// :returns: a read-only dict-like object whose keys are the node indices and values are the
+///      centrality score for that node.
+/// :rtype: CentralityMapping
+#[pyfunction(
+    signature = (
+        graph,
+        weight_fn=None,
+        default_weight=1.0,
+        max_iter=100,
+        tol=1e-6
+    )
+)]
+#[pyo3(text_signature = "(graph, /, weight_fn=None, default_weight=1.0, max_iter=100, tol=1e-6)")]
+pub fn graph_eigenvector_centrality(
+    py: Python,
+    graph: &graph::PyGraph,
+    weight_fn: Option<PyObject>,
+    default_weight: f64,
+    max_iter: usize,
+    tol: f64,
+) -> PyResult<CentralityMapping> {
+    let mut edge_weights = vec![default_weight; graph.graph.edge_bound()];
+    if weight_fn.is_some() {
+        let cost_fn = CostFn::try_from((weight_fn, default_weight))?;
+        for edge in graph.graph.edge_indices() {
+            edge_weights[edge.index()] =
+                cost_fn.call(py, graph.graph.edge_weight(edge).unwrap())?;
+        }
+    }
+    let ev_centrality = centrality::eigenvector_centrality(
+        &graph.graph,
+        |e| -> PyResult<f64> { Ok(edge_weights[e.id().index()]) },
+        Some(max_iter),
+        Some(tol),
+    )?;
+    match ev_centrality {
+        Some(centrality) => Ok(CentralityMapping {
+            centralities: centrality
+                .iter()
+                .enumerate()
+                .filter_map(|(k, v)| {
+                    if graph.graph.contains_node(NodeIndex::new(k)) {
+                        Some((k, *v))
+                    } else {
+                        None
+                    }
+                })
+                .collect(),
+        }),
+        None => Err(FailedToConverge::new_err(format!(
+            "Function failed to converge on a solution in {} iterations",
+            max_iter
+        ))),
+    }
+}
+
+/// Compute the eigenvector centrality of a :class:`~PyDiGraph`.
+///
+/// For details on the eigenvector centrality refer to:
+///
+/// Phillip Bonacich. “Power and Centrality: A Family of Measures.”
+/// American Journal of Sociology 92(5):1170–1182, 1986
+/// <https://doi.org/10.1086/228631>
+///
+/// This function uses a power iteration method to compute the eigenvector
+/// and convergence is not guaranteed. The function will stop when `max_iter`
+/// iterations is reached or when the computed vector between two iterations
+/// is smaller than the error tolerance multiplied by the number of nodes.
+/// The implementation of this algorithm is based on the NetworkX
+/// `eigenvector_centrality() <https://networkx.org/documentation/stable/reference/algorithms/generated/networkx.algorithms.centrality.eigenvector_centrality.html>`__
+/// function.
+///
+/// In the case of multigraphs the weights of any parallel edges will be
+/// summed when computing the eigenvector centrality.
+///
+/// :param PyDiGraph graph: The graph object to run the algorithm on
+/// :param weight_fn: An optional input callable that will be passed the edge's
+///     payload object and is expected to return a `float` weight for that edge.
+///     If this is not specified ``default_weight`` will be used as the weight
+///     for every edge in ``graph``
+/// :param float default_weight: If ``weight_fn`` is not set the default weight
+///     value to use for the weight of all edges
+/// :param int max_iter: The maximum number of iterations in the power method. If
+///     not specified a default value of 100 is used.
+/// :param float tol: The error tolerance used when checking for convergence in the
+///     power method. If this is not specified default value of 1e-6 is used.
+///
+/// :returns: a read-only dict-like object whose keys are the node indices and values are the
+///      centrality score for that node.
+/// :rtype: CentralityMapping
+#[pyfunction(
+    signature = (
+        graph,
+        weight_fn=None,
+        default_weight=1.0,
+        max_iter=100,
+        tol=1e-6
+    )
+)]
+#[pyo3(text_signature = "(graph, /, weight_fn=None, default_weight=1.0, max_iter=100, tol=1e-6)")]
+pub fn digraph_eigenvector_centrality(
+    py: Python,
+    graph: &digraph::PyDiGraph,
+    weight_fn: Option<PyObject>,
+    default_weight: f64,
+    max_iter: usize,
+    tol: f64,
+) -> PyResult<CentralityMapping> {
+    let mut edge_weights = vec![default_weight; graph.graph.edge_bound()];
+    if weight_fn.is_some() {
+        let cost_fn = CostFn::try_from((weight_fn, default_weight))?;
+        for edge in graph.graph.edge_indices() {
+            edge_weights[edge.index()] =
+                cost_fn.call(py, graph.graph.edge_weight(edge).unwrap())?;
+        }
+    }
+    let ev_centrality = centrality::eigenvector_centrality(
+        &graph.graph,
+        |e| -> PyResult<f64> { Ok(edge_weights[e.id().index()]) },
+        Some(max_iter),
+        Some(tol),
+    )?;
+
+    match ev_centrality {
+        Some(centrality) => Ok(CentralityMapping {
+            centralities: centrality
+                .iter()
+                .enumerate()
+                .filter_map(|(k, v)| {
+                    if graph.graph.contains_node(NodeIndex::new(k)) {
+                        Some((k, *v))
+                    } else {
+                        None
+                    }
+                })
+                .collect(),
+        }),
+        None => Err(FailedToConverge::new_err(format!(
+            "Function failed to converge on a solution in {} iterations",
+            max_iter
+        ))),
+    }
+}
+
+/// Compute the Katz centrality of a :class:`~PyGraph`.
+///
+/// For details on the Katz centrality refer to:
+///
+/// Leo Katz. “A New Status Index Derived from Sociometric Index.”
+/// Psychometrika 18(1):39–43, 1953
+/// <https://link.springer.com/content/pdf/10.1007/BF02289026.pdf>
+///
+/// This function uses a power iteration method to compute the eigenvector
+/// and convergence is not guaranteed. The function will stop when `max_iter`
+/// iterations is reached or when the computed vector between two iterations
+/// is smaller than the error tolerance multiplied by the number of nodes.
+/// The implementation of this algorithm is based on the NetworkX
+/// `katz_centrality() <https://networkx.org/documentation/stable/reference/algorithms/generated/networkx.algorithms.centrality.katz_centrality.html>`__
+/// function.
+///
+/// In the case of multigraphs the weights of any parallel edges will be
+/// summed when computing the Katz centrality.
+///
+/// :param PyGraph graph: The graph object to run the algorithm on
+/// :param float alpha: Attenuation factor. If this is not specified default value of 0.1 is used.
+/// :param float | dict beta: Immediate neighbourhood weights. If a float is provided, the neighbourhood
+///     weight is used for all nodes. If a dictionary is provided, it must contain all node indices.
+///     If beta is not specified, a default value of 1.0 is used.
+/// :param weight_fn: An optional input callable that will be passed the edge's
+///     payload object and is expected to return a `float` weight for that edge.
+///     If this is not specified ``default_weight`` will be used as the weight
+///     for every edge in ``graph``
+/// :param float default_weight: If ``weight_fn`` is not set the default weight
+///     value to use for the weight of all edges
+/// :param int max_iter: The maximum number of iterations in the power method. If
+///     not specified a default value of 1000 is used.
+/// :param float tol: The error tolerance used when checking for convergence in the
+///     power method. If this is not specified default value of 1e-6 is used.
+///
+/// :returns: a read-only dict-like object whose keys are the node indices and values are the
+///      centrality score for that node.
+/// :rtype: CentralityMapping
+#[pyfunction(
+    signature = (
+        graph,
+        alpha=0.1,
+        beta=None,
+        weight_fn=None,
+        default_weight=1.0,
+        max_iter=1000,
+        tol=1e-6
+    )
+)]
+#[pyo3(
+    text_signature = "(graph, /, alpha=0.1, beta=None, weight_fn=None, default_weight=1.0, max_iter=1000, tol=1e-6)"
+)]
+pub fn graph_katz_centrality(
+    py: Python,
+    graph: &graph::PyGraph,
+    alpha: f64,
+    beta: Option<PyObject>,
+    weight_fn: Option<PyObject>,
+    default_weight: f64,
+    max_iter: usize,
+    tol: f64,
+) -> PyResult<CentralityMapping> {
+    let mut edge_weights = vec![default_weight; graph.graph.edge_bound()];
+    if weight_fn.is_some() {
+        let cost_fn = CostFn::try_from((weight_fn, default_weight))?;
+        for edge in graph.graph.edge_indices() {
+            edge_weights[edge.index()] =
+                cost_fn.call(py, graph.graph.edge_weight(edge).unwrap())?;
+        }
+    }
+
+    let mut beta_map: HashMap<usize, f64> = HashMap::new();
+
+    if let Some(beta) = beta {
+        match beta.extract::<f64>(py) {
+            Ok(beta_scalar) => {
+                // User provided a scalar, populate beta_map with the value
+                for node_index in graph.graph.node_identifiers() {
+                    beta_map.insert(node_index.index(), beta_scalar);
+                }
+            }
+            Err(_) => {
+                beta_map = beta.extract::<HashMap<usize, f64>>(py)?;
+
+                for node_index in graph.graph.node_identifiers() {
+                    if !beta_map.contains_key(&node_index.index()) {
+                        return Err(PyValueError::new_err(
+                            "Beta does not contain all node indices",
+                        ));
+                    }
+                }
+            }
+        }
+    } else {
+        // Populate with 1.0
+        for node_index in graph.graph.node_identifiers() {
+            beta_map.insert(node_index.index(), 1.0);
+        }
+    }
+
+    let ev_centrality = centrality::katz_centrality(
+        &graph.graph,
+        |e| -> PyResult<f64> { Ok(edge_weights[e.id().index()]) },
+        Some(alpha),
+        Some(beta_map),
+        None,
+        Some(max_iter),
+        Some(tol),
+    )?;
+    match ev_centrality {
+        Some(centrality) => Ok(CentralityMapping {
+            centralities: centrality
+                .iter()
+                .enumerate()
+                .filter_map(|(k, v)| {
+                    if graph.graph.contains_node(NodeIndex::new(k)) {
+                        Some((k, *v))
+                    } else {
+                        None
+                    }
+                })
+                .collect(),
+        }),
+        None => Err(FailedToConverge::new_err(format!(
+            "Function failed to converge on a solution in {} iterations",
+            max_iter
+        ))),
+    }
+}
+
+/// Compute the Katz centrality of a :class:`~PyDiGraph`.
+///
+/// For details on the Katz centrality refer to:
+///
+/// Leo Katz. “A New Status Index Derived from Sociometric Index.”
+/// Psychometrika 18(1):39–43, 1953
+/// <https://link.springer.com/content/pdf/10.1007/BF02289026.pdf>
+///
+/// This function uses a power iteration method to compute the eigenvector
+/// and convergence is not guaranteed. The function will stop when `max_iter`
+/// iterations is reached or when the computed vector between two iterations
+/// is smaller than the error tolerance multiplied by the number of nodes.
+/// The implementation of this algorithm is based on the NetworkX
+/// `katz_centrality() <https://networkx.org/documentation/stable/reference/algorithms/generated/networkx.algorithms.centrality.katz_centrality.html>`__
+/// function.
+///
+/// In the case of multigraphs the weights of any parallel edges will be
+/// summed when computing the Katz centrality.
+///
+/// :param PyDiGraph graph: The graph object to run the algorithm on
+/// :param float alpha: Attenuation factor. If this is not specified default value of 0.1 is used.
+/// :param float | dict beta: Immediate neighbourhood weights. If a float is provided, the neighbourhood
+///     weight is used for all nodes. If a dictionary is provided, it must contain all node indices.
+///     If beta is not specified, a default value of 1.0 is used.
+/// :param weight_fn: An optional input callable that will be passed the edge's
+///     payload object and is expected to return a `float` weight for that edge.
+///     If this is not specified ``default_weight`` will be used as the weight
+///     for every edge in ``graph``
+/// :param float default_weight: If ``weight_fn`` is not set the default weight
+///     value to use for the weight of all edges
+/// :param int max_iter: The maximum number of iterations in the power method. If
+///     not specified a default value of 1000 is used.
+/// :param float tol: The error tolerance used when checking for convergence in the
+///     power method. If this is not specified default value of 1e-6 is used.
+///
+/// :returns: a read-only dict-like object whose keys are the node indices and values are the
+///      centrality score for that node.
+/// :rtype: CentralityMapping
+#[pyfunction(
+    signature = (
+        graph,
+        alpha=0.1,
+        beta=None,
+        weight_fn=None,
+        default_weight=1.0,
+        max_iter=1000,
+        tol=1e-6
+    )
+)]
+#[pyo3(
+    text_signature = "(graph, /, alpha=0.1, beta=None, weight_fn=None, default_weight=1.0, max_iter=1000, tol=1e-6)"
+)]
+pub fn digraph_katz_centrality(
+    py: Python,
+    graph: &digraph::PyDiGraph,
+    alpha: f64,
+    beta: Option<PyObject>,
+    weight_fn: Option<PyObject>,
+    default_weight: f64,
+    max_iter: usize,
+    tol: f64,
+) -> PyResult<CentralityMapping> {
+    let mut edge_weights = vec![default_weight; graph.graph.edge_bound()];
+    if weight_fn.is_some() {
+        let cost_fn = CostFn::try_from((weight_fn, default_weight))?;
+        for edge in graph.graph.edge_indices() {
+            edge_weights[edge.index()] =
+                cost_fn.call(py, graph.graph.edge_weight(edge).unwrap())?;
+        }
+    }
+
+    let mut beta_map: HashMap<usize, f64> = HashMap::new();
+
+    if let Some(beta) = beta {
+        match beta.extract::<f64>(py) {
+            Ok(beta_scalar) => {
+                // User provided a scalar, populate beta_map with the value
+                for node_index in graph.graph.node_identifiers() {
+                    beta_map.insert(node_index.index(), beta_scalar);
+                }
+            }
+            Err(_) => {
+                beta_map = beta.extract::<HashMap<usize, f64>>(py)?;
+
+                for node_index in graph.graph.node_identifiers() {
+                    if !beta_map.contains_key(&node_index.index()) {
+                        return Err(PyValueError::new_err(
+                            "Beta does not contain all node indices",
+                        ));
+                    }
+                }
+            }
+        }
+    } else {
+        // Populate with 1.0
+        for node_index in graph.graph.node_identifiers() {
+            beta_map.insert(node_index.index(), 1.0);
+        }
+    }
+
+    let ev_centrality = centrality::katz_centrality(
+        &graph.graph,
+        |e| -> PyResult<f64> { Ok(edge_weights[e.id().index()]) },
+        Some(alpha),
+        Some(beta_map),
+        None,
+        Some(max_iter),
+        Some(tol),
+    )?;
+
+    match ev_centrality {
+        Some(centrality) => Ok(CentralityMapping {
+            centralities: centrality
+                .iter()
+                .enumerate()
+                .filter_map(|(k, v)| {
+                    if graph.graph.contains_node(NodeIndex::new(k)) {
+                        Some((k, *v))
+                    } else {
+                        None
+                    }
+                })
+                .collect(),
+        }),
+        None => Err(FailedToConverge::new_err(format!(
+            "Function failed to converge on a solution in {} iterations",
+            max_iter
+        ))),
     }
 }

@@ -12,12 +12,12 @@
 
 import unittest
 
-import retworkx
+import rustworkx
 
 
 class TestAdj(unittest.TestCase):
     def test_single_neighbor(self):
-        dag = retworkx.PyDAG()
+        dag = rustworkx.PyDAG()
         node_a = dag.add_node("a")
         node_b = dag.add_child(node_a, "b", {"a": 1})
         node_c = dag.add_child(node_a, "c", {"a": 2})
@@ -25,7 +25,7 @@ class TestAdj(unittest.TestCase):
         self.assertCountEqual([node_c, node_b], res)
 
     def test_unique_neighbors_on_dags(self):
-        dag = retworkx.PyDAG()
+        dag = rustworkx.PyDAG()
         node_a = dag.add_node("a")
         node_b = dag.add_child(node_a, "b", ["edge a->b"])
         node_c = dag.add_child(node_a, "c", ["edge a->c"])
@@ -34,7 +34,7 @@ class TestAdj(unittest.TestCase):
         self.assertCountEqual([node_c, node_b], res)
 
     def test_single_neighbor_dir(self):
-        dag = retworkx.PyDAG()
+        dag = rustworkx.PyDAG()
         node_a = dag.add_node("a")
         node_b = dag.add_child(node_a, "b", {"a": 1})
         node_c = dag.add_child(node_a, "c", {"a": 2})
@@ -44,7 +44,7 @@ class TestAdj(unittest.TestCase):
         self.assertEqual([], res)
 
     def test_neighbor_dir_surrounded(self):
-        dag = retworkx.PyDAG()
+        dag = rustworkx.PyDAG()
         node_a = dag.add_node("a")
         node_b = dag.add_child(node_a, "b", {"a": 1})
         node_c = dag.add_child(node_b, "c", {"a": 2})
@@ -54,6 +54,6 @@ class TestAdj(unittest.TestCase):
         self.assertEqual([node_a], res)
 
     def test_no_neighbor(self):
-        dag = retworkx.PyDAG()
+        dag = rustworkx.PyDAG()
         node_a = dag.add_node("a")
         self.assertEqual([], dag.neighbors(node_a))

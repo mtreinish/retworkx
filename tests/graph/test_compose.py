@@ -12,18 +12,18 @@
 
 import unittest
 
-import retworkx
+import rustworkx
 
 
 class TestCompose(unittest.TestCase):
     def test_simple_graph_composition(self):
-        graph = retworkx.PyGraph()
+        graph = rustworkx.PyGraph()
         node_a = graph.add_node("a")
         node_b = graph.add_node("b")
         graph.add_edge(node_a, node_b, {"a": 1})
         node_c = graph.add_node("c")
         graph.add_edge(node_b, node_c, {"a": 2})
-        graph_other = retworkx.PyGraph()
+        graph_other = rustworkx.PyGraph()
         node_d = graph_other.add_node("d")
         node_e = graph_other.add_node("e")
         graph_other.add_edge(node_d, node_e, {"a": 3})
@@ -32,14 +32,14 @@ class TestCompose(unittest.TestCase):
         self.assertEqual([0, 1, 2, 3, 4], graph.node_indexes())
 
     def test_edge_map_and_node_map_funcs_graph_compose(self):
-        graph = retworkx.PyGraph()
+        graph = rustworkx.PyGraph()
         original_input_nodes = graph.add_nodes_from(["qr[0]", "qr[1]"])
         original_op_nodes = graph.add_nodes_from(["h"])
         output_nodes = graph.add_nodes_from(["qr[0]", "qr[1]"])
         graph.add_edge(original_input_nodes[0], original_op_nodes[0], "qr[0]")
         graph.add_edge(original_op_nodes[0], output_nodes[0], "qr[0]")
         # Setup other graph
-        other_graph = retworkx.PyGraph()
+        other_graph = rustworkx.PyGraph()
         input_nodes = other_graph.add_nodes_from(["qr[2]", "qr[3]"])
         op_nodes = other_graph.add_nodes_from(["cx"])
         other_output_nodes = other_graph.add_nodes_from(["qr[2]", "qr[3]"])
@@ -70,9 +70,7 @@ class TestCompose(unittest.TestCase):
             original_op_nodes[0]: (op_nodes[0], "qr[0]"),
             original_input_nodes[1]: (op_nodes[0], "qr[1]"),
         }
-        res = graph.compose(
-            other_graph, node_map, node_map_func=map_fn, edge_map_func=map_fn
-        )
+        res = graph.compose(other_graph, node_map, node_map_func=map_fn, edge_map_func=map_fn)
         self.assertEqual({2: 4, 3: 3, 4: 5}, res)
         self.assertEqual(graph[res[other_output_nodes[0]]], "qr[0]")
         self.assertEqual(graph[res[other_output_nodes[1]]], "qr[1]")
@@ -93,7 +91,7 @@ class TestCompose(unittest.TestCase):
         self.assertTrue(graph.get_all_edge_data(0, 2), ["qr[1]"])
 
     def test_compose_digraph_onto_graph_error(self):
-        digraph = retworkx.PyDiGraph()
-        graph = retworkx.PyGraph()
+        digraph = rustworkx.PyDiGraph()
+        graph = rustworkx.PyGraph()
         with self.assertRaises(TypeError):
             graph.compose(digraph, {})

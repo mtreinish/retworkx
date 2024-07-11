@@ -12,12 +12,12 @@
 
 import unittest
 
-import retworkx
+import rustworkx
 
 
 class TestNeighbors(unittest.TestCase):
     def test_single_neighbor(self):
-        graph = retworkx.PyGraph()
+        graph = rustworkx.PyGraph()
         node_a = graph.add_node("a")
         node_b = graph.add_node("b")
         graph.add_edge(node_a, node_b, {"a": 1})
@@ -27,7 +27,7 @@ class TestNeighbors(unittest.TestCase):
         self.assertCountEqual([node_c, node_b], res)
 
     def test_unique_neighbors_on_graphs(self):
-        dag = retworkx.PyGraph()
+        dag = rustworkx.PyGraph()
         node_a = dag.add_node("a")
         node_b = dag.add_node("b")
         node_c = dag.add_node("c")
@@ -38,6 +38,6 @@ class TestNeighbors(unittest.TestCase):
         self.assertCountEqual([node_c, node_b], res)
 
     def test_no_neighbor(self):
-        graph = retworkx.PyGraph()
+        graph = rustworkx.PyGraph()
         node_a = graph.add_node("a")
         self.assertEqual([], graph.neighbors(node_a))

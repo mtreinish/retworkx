@@ -12,20 +12,20 @@
 
 import unittest
 
-import retworkx
+import rustworkx
 
 
 class TestDfsEdges(unittest.TestCase):
     def test_graph_dfs_edges(self):
-        graph = retworkx.PyGraph()
+        graph = rustworkx.PyGraph()
         graph.extend_from_edge_list([(0, 1), (1, 2), (1, 3), (2, 4), (3, 4)])
-        edges = retworkx.graph_dfs_edges(graph, 0)
+        edges = rustworkx.graph_dfs_edges(graph, 0)
         expected = [(0, 1), (1, 2), (2, 4), (4, 3)]
         self.assertEqual(expected, edges)
 
     def test_graph_disconnected_dfs_edges(self):
-        graph = retworkx.PyGraph()
+        graph = rustworkx.PyGraph()
         graph.extend_from_edge_list([(0, 1), (2, 3)])
-        edges = retworkx.graph_dfs_edges(graph)
+        edges = rustworkx.graph_dfs_edges(graph)
         expected = [(0, 1), (2, 3)]
         self.assertEqual(expected, edges)
