@@ -726,5 +726,3 @@ pub fn transitive_closure_dag(
         Err(_err) => Err(DAGHasCycle::new_err("Topological Sort encountered a cycle")),
     }
 }
-
-

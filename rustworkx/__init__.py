@@ -2019,7 +2019,7 @@ def descendants_at_distance(graph, source, distance):
 
     :return: The node indices of the nodes ``distance`` from ``source`` in ``graph``.
     :rtype: NodeIndices
-    
+
     For example::
 
         import rustworkx as rx
