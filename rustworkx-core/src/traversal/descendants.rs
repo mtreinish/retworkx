@@ -42,3 +42,52 @@ where
     }
     current_layer
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use petgraph::graph::NodeIndex;
+    use petgraph::Graph;
+
+    #[test]
+    fn test_descendants_at_distance_empty_graph() {
+        let graph = Graph::<(), ()>::new();
+        let source = NodeIndex::new(0);
+        let distance = 1;
+        let result = descendants_at_distance(&graph, source, distance);
+        assert!(result.is_empty());
+    }
+
+    #[test]
+    fn test_descendants_at_distance_single_node() {
+        let mut graph = Graph::<(), ()>::new();
+        let source = graph.add_node(());
+        let distance = 1;
+        let result = descendants_at_distance(&graph, source, distance);
+        assert!(result.is_empty());
+    }
+
+    #[test]
+    fn test_descendants_at_distance_simple_graph() {
+        let mut graph = Graph::<(), ()>::new();
+        let node0 = graph.add_node(());
+        let node1 = graph.add_node(());
+        let node2 = graph.add_node(());
+        let node3 = graph.add_node(());
+        graph.add_edge(node0, node1, ());
+        graph.add_edge(node1, node2, ());
+        graph.add_edge(node2, node3, ());
+
+        let result = descendants_at_distance(&graph, node0, 1);
+        assert_eq!(result, vec![node1]);
+
+        let result = descendants_at_distance(&graph, node0, 2);
+        assert_eq!(result, vec![node2]);
+
+        let result = descendants_at_distance(&graph, node0, 3);
+        assert_eq!(result, vec![node3]);
+
+        let result = descendants_at_distance(&graph, node0, 4);
+        assert!(result.is_empty());
+    }
+}
