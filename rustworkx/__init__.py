@@ -2030,4 +2030,3 @@ def all_shortest_paths(
 
     """
     raise TypeError("Invalid Input Type %s for graph" % type(graph))
->>>>>>> origin/main
